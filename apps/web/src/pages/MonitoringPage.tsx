@@ -237,7 +237,7 @@ export function MonitoringPage() {
       { id: 'assistants', health: 'neutral', lines: ['MCP · /v1/mcp'] },
       { id: 'cloudfront', health: 'neutral', lines: ['HTTPS', window.location.host.slice(0, 24)] },
       { id: 'front', health: 'ok', lines: [t('mon.line.console')] },
-      { id: 'api', health: apiHealth, lines: [`v${m.version}`.slice(0, 22), m.system ? t('mon.line.resources', { cpu: number(m.system.cpuPct), mem: number(Math.round(m.system.memMb)) }) : t('mon.line.uptime', { d: uptime(m.uptimeSeconds, t('unit.day')) }), t('mon.line.errors', { n: m.traffic.errorsPerMinute })], firing: fires('api') },
+      { id: 'api', health: apiHealth, lines: [`v${m.version.replace(/^v/, '')}`.slice(0, 22), m.system ? t('mon.line.resources', { cpu: number(m.system.cpuPct), mem: number(Math.round(m.system.memMb)) }) : t('mon.line.uptime', { d: uptime(m.uptimeSeconds, t('unit.day')) }), t('mon.line.errors', { n: m.traffic.errorsPerMinute })], firing: fires('api') },
       { id: 'workers', health: workersHealth, lines: [t('mon.line.busy', { busy: m.workers.busy, total: m.workers.total }), t('mon.line.queued', { n: m.workers.queued }), `p95 ${number(m.renders.p95Ms)} ms`], firing: fires('workers') },
       { id: 'database', health: m.database.ok ? 'ok' : 'critical', lines: [m.database.engine, m.database.ok ? t('mon.dbOk') : t('mon.dbDown')], firing: fires('database') },
       {

@@ -14,6 +14,7 @@
   <img src="https://img.shields.io/badge/Docker-Compose-2496ed?logo=docker&logoColor=white" alt="Docker Compose">
   <img src="https://img.shields.io/badge/LibreOffice-26.8-0f766e?logo=libreoffice&logoColor=white" alt="LibreOffice 26.8">
   <img src="https://img.shields.io/badge/platform-amd64-17314a" alt="amd64">
+  <a href="https://drslid.github.io/docibis/"><img src="https://img.shields.io/badge/docs-drslid.github.io%2Fdocibis-0f766e" alt="Documentation"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-0b1724" alt="MIT License"></a>
 </p>
 
@@ -78,7 +79,7 @@ curl -fsSL https://raw.githubusercontent.com/drslid/docibis/v0.1.0/install.sh \
 DocIbis is a document generation service. An application sends a Word template, or the name of a template kept in the DocIbis library, with JSON data; DocIbis merges them and returns a PDF or a Word document. Templates use the Docmosis tag syntax, so existing Docmosis templates and calls keep working. LibreOffice 26.8 lays out the pages.
 
 <p align="center">
-  <img src=".github/assets/screenshots/templates.png" alt="DocIbis template library: each template with its published version, checks and rendering engine" width="1200">
+  <img src="apps/docs/src/assets/screenshots/home.png" alt="DocIbis dashboard: documents produced today and over 30 days, success rate, durations and API keys" width="1200">
 </p>
 
 ```bash
@@ -104,7 +105,7 @@ curl -H "Authorization: Bearer $DOCIBIS_API_KEY" \
 - Console in English, French, German and Italian, with a dark mode.
 
 <p align="center">
-  <img src=".github/assets/screenshots/template.png" alt="A DocIbis template page: published version, data check and the API call to copy into an application" width="1200">
+  <img src="apps/docs/src/assets/screenshots/templates.png" alt="DocIbis template library: each template with its published version, checks and rendering engine" width="1200">
 </p>
 
 ### Template syntax
@@ -181,6 +182,19 @@ flowchart LR
 
 The `web` container serves the console and forwards `/api` and `/v1` to the `api` container, which is not published. With a domain name, Caddy obtains and renews the HTTPS certificate. The `api` container runs the Go server and its pool of LibreOffice workers in the same image.
 
+<p align="center">
+  <img src="apps/docs/src/assets/screenshots/monitoring.png" alt="DocIbis Monitoring page: the live architecture with requests, API, LibreOffice workers, database and S3 copy" width="1200">
+</p>
+
+## Documentation
+
+The complete documentation, with screenshots of each step, lives at **[drslid.github.io/docibis](https://drslid.github.io/docibis/)**:
+
+- [Install](https://drslid.github.io/docibis/getting-started/install/) and [first steps](https://drslid.github.io/docibis/getting-started/first-steps/)
+- [Write a template](https://drslid.github.io/docibis/guides/templates/)
+- [Produce documents by API](https://drslid.github.io/docibis/guides/api/), including Docmosis clients
+- [Configuration](https://drslid.github.io/docibis/operations/configuration/) and [day-to-day operations](https://drslid.github.io/docibis/operations/maintenance/)
+
 ## Development
 
 ```bash
@@ -200,6 +214,7 @@ cd apps/web && npm ci && npm test && npm run dev
 ```text
 apps/api        Go API, merge engine, LibreOffice worker, migrations, OpenAPI contract
 apps/web        React console and Caddy configuration
+apps/docs       Documentation site (Astro Starlight), published on GitHub Pages
 compose.yaml    Docker Compose stack used by install.sh
 install.sh      One-line installer
 ```
