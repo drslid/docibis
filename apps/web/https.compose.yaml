@@ -1,0 +1,16 @@
+# HTTPS with an automatic certificate for DOCIBIS_DOMAIN. install.sh adds this
+# file to COMPOSE_FILE when a domain name is given; ports 80 and 443 must
+# reach this server.
+services:
+  web:
+    environment:
+      DOCIBIS_DOMAIN: ${DOCIBIS_DOMAIN:?set DOCIBIS_DOMAIN in .env}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - certificates:/var/lib/caddy
+
+volumes:
+  certificates:

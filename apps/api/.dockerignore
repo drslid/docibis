@@ -1,0 +1,10 @@
+*
+!go.mod
+!go.sum
+!VERSION
+!CHANGES
+!cmd/
+!internal/
+!migrations/
+!worker/
+**/*_test.go

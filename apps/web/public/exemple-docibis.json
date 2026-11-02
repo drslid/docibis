@@ -1,0 +1,23 @@
+{
+  "client": {
+    "civilite": "Madame",
+    "prenom": "Marie",
+    "nom": "Dupont",
+    "adresse": "12 rue de la Paix",
+    "codePostal": "75002",
+    "ville": "Paris",
+    "dejaClient": true
+  },
+  "proposition": {
+    "numero": "DI-2026-0012345"
+  },
+  "garanties": [
+    { "libelle": "Décès toutes causes", "capital": "5 000", "cotisation": "18,40" },
+    { "libelle": "Assistance rapatriement", "capital": "2 000", "cotisation": "3,20" },
+    { "libelle": "Capital doublé en cas d'accident", "capital": "10 000", "cotisation": "4,90" }
+  ],
+  "paiement": {
+    "prelevement": true,
+    "cheque": false
+  }
+}

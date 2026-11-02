@@ -1,0 +1,20 @@
+# Dependencies and builds
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+
+# Written by the release workflow into the API image
+/apps/api/VERSION
+/apps/api/CHANGES
+
+# Local configuration and fonts of a Docker install
+.env
+.env.*
+/fonts/
+
+# Editors
+.vscode/
+.idea/
+*.swp
+.DS_Store

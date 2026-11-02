@@ -1,0 +1,48 @@
+{
+	admin off
+	persist_config off
+	servers {
+		trusted_proxies static private_ranges
+	}
+}
+
+(app) {
+	encode zstd gzip
+
+	header {
+		X-Content-Type-Options nosniff
+		X-Frame-Options DENY
+		Referrer-Policy strict-origin-when-cross-origin
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; frame-src 'self' blob:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src blob:"
+		-Server
+	}
+
+	@api path /api/* /v1/* /mcp /mcp/* /metrics
+	handle @api {
+		reverse_proxy {$API_UPSTREAM}
+	}
+
+	# Console: hashed assets are cached for a year, everything else is
+	# checked again; unknown paths open the single-page application.
+	handle {
+		root * /srv
+		@assets path /assets/*
+		header @assets Cache-Control "public, max-age=31536000, immutable"
+		@pages not path /assets/*
+		header @pages Cache-Control "no-cache"
+		try_files {path} /index.html
+		file_server
+	}
+}
+
+# Plain HTTP, always: the port published by compose.yaml and the health check.
+:8080 {
+	import app
+}
+
+# With DOCIBIS_DOMAIN, HTTPS on 443 with an automatic certificate; without it,
+# an unused listener on the loopback of the container.
+{$DOCIBIS_DOMAIN:http://127.0.0.1:8081} {
+	import app
+}

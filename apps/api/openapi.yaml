@@ -1,0 +1,4114 @@
+openapi: 3.1.0
+info:
+  title: DocIbis API
+  version: 0.1.0
+  description: |
+    Génération de documents PDF et Word à partir de modèles Word.
+    `/v1` sert les applications (clé API), `/api` la console (session),
+    `/healthz` et `/readyz` la supervision.
+servers:
+  - url: /
+tags:
+  - name: documents
+    description: Production de documents par les applications (clé API)
+  - name: supervision
+    description: État du service
+  - name: console
+    description: API de la console
+paths:
+  /v1/render:
+    post:
+      operationId: renderDocument
+      tags: [documents]
+      summary: Produit un document à partir d'un modèle Word et de données JSON
+      description: |
+        Envoyez le modèle Word (.docx, avec ses balises Docmosis), ou le nom d'un modèle de la
+        bibliothèque (templateName), et les données JSON ; la réponse est le document (PDF par
+        défaut). Ni le document ni ses données ne sont gardés.
+
+            curl -H "Authorization: Bearer $DOCIBIS_API_KEY" \
+              -F templateName=acme/contracts/broker/monthly/fiche_conseil.docx \
+              -F data=@donnees.json -o document.pdf https://<instance>/v1/render
+      security:
+        - apiKey: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: "#/components/schemas/RenderForm"
+      responses:
+        "200":
+          description: Le document produit
+          headers:
+            Content-Disposition:
+              schema:
+                type: string
+            X-Render-Ms:
+              description: Temps de production, en millisecondes
+              schema:
+                type: integer
+            X-Render-Engine:
+              description: Moteur utilisé
+              schema:
+                type: string
+            X-Missing-Fields:
+              description: Données attendues par le modèle mais absentes (contrôle « warn »), chemins séparés par des virgules et encodés comme dans une URL
+              schema:
+                type: string
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+            application/vnd.openxmlformats-officedocument.wordprocessingml.document:
+              schema:
+                type: string
+                format: binary
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "413":
+          $ref: "#/components/responses/TooLarge"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "503":
+          $ref: "#/components/responses/Busy"
+  /v1/render/batch:
+    post:
+      operationId: renderBatch
+      tags: [documents]
+      summary: Produit plusieurs documents en un appel, fusionnés en un seul PDF ou rendus dans un zip
+      description: |
+        Chaque document vient d'un modèle de la bibliothèque et de ses données, ou d'un PDF fixe de la
+        bibliothèque (conditions générales…). Les documents sont produits en parallèle puis, avec
+        merge (par défaut), réunis dans l'ordre en un seul PDF.
+      security:
+        - apiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BatchRequest"
+      responses:
+        "200":
+          description: Le PDF fusionné, ou un zip des documents
+          headers:
+            Content-Disposition:
+              schema:
+                type: string
+            X-Render-Ms:
+              schema:
+                type: integer
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+            application/zip:
+              schema:
+                type: string
+                format: binary
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "413":
+          $ref: "#/components/responses/TooLarge"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "503":
+          $ref: "#/components/responses/Busy"
+  /v1/bundles/{name}/render:
+    post:
+      operationId: renderBundle
+      tags: [documents]
+      summary: Produit une liasse définie dans la console (plusieurs modèles et PDF fixes) avec les mêmes données
+      description: |
+        La liasse (page Liasses de la console) dit quels documents produire, dans quel ordre et
+        sous quelles conditions ; l'application n'envoie que son nom et les données.
+      security:
+        - apiKey: []
+      parameters:
+        - {name: name, in: path, required: true, description: "Nom de la liasse, par exemple souscription-habitation", schema: {type: string}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BundleRenderRequest"
+      responses:
+        "200":
+          description: Le PDF de la liasse, ou un zip de ses documents
+          headers:
+            Content-Disposition:
+              schema:
+                type: string
+            X-Render-Ms:
+              schema:
+                type: integer
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+            application/zip:
+              schema:
+                type: string
+                format: binary
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "503":
+          $ref: "#/components/responses/Busy"
+  /v1/templates/import:
+    post:
+      operationId: receiveTemplates
+      tags: [templates]
+      summary: Reçoit des modèles d'un autre environnement (promotion), avec une clé qui le permet
+      security:
+        - apiKey: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                publish:
+                  type: boolean
+      responses:
+        "200":
+          description: Ce qui a été reçu
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ImportReport"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "413":
+          $ref: "#/components/responses/TooLarge"
+  /v1/templates:
+    get:
+      operationId: listPublishedTemplates
+      tags: [documents]
+      summary: Modèles publiés de la bibliothèque, avec les données qu'ils attendent
+      security:
+        - apiKey: []
+      parameters:
+        - {name: q, in: query, description: Texte cherché dans le chemin, schema: {type: string}}
+      responses:
+        "200":
+          description: Les modèles
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TemplateContract"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /api/render:
+    post:
+      operationId: docmosisRender
+      tags: [documents]
+      summary: Compatibilité Docmosis (Tornado) — même appel que document-composition
+      description: |
+        Les applications qui appelaient Docmosis passent à DocIbis en changeant seulement l'adresse
+        et accessKey (une clé API DocIbis). templateName est le chemin du modèle dans la bibliothèque.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DocmosisRender"
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: "#/components/schemas/DocmosisRenderForm"
+      responses:
+        "200":
+          description: Le document produit
+          headers:
+            Content-Disposition:
+              schema:
+                type: string
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+            application/vnd.openxmlformats-officedocument.wordprocessingml.document:
+              schema:
+                type: string
+                format: binary
+        "400":
+          description: Demande refusée
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DocmosisError"
+        "401":
+          description: accessKey inconnue
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DocmosisError"
+        "404":
+          description: Modèle introuvable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DocmosisError"
+        "429":
+          description: Trop d'appels pour cette clé
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DocmosisError"
+        "503":
+          description: Moteur occupé ou en démarrage
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DocmosisError"
+  /v1/openapi.json:
+    get:
+      operationId: getContract
+      tags: [documents]
+      summary: Ce contrat, pour générer un client dans n'importe quel langage
+      security: []
+      responses:
+        "200":
+          description: Contrat OpenAPI 3.1
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+  /healthz:
+    get:
+      operationId: getHealthz
+      tags: [supervision]
+      summary: Le processus répond
+      security: []
+      responses:
+        "200":
+          description: Vivant
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Health"
+  /readyz:
+    get:
+      operationId: getReadyz
+      tags: [supervision]
+      summary: Prêt à servir (base ouverte et à jour)
+      security: []
+      responses:
+        "200":
+          description: Prêt
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Health"
+        "503":
+          description: Pas encore prêt, ou plus en état de servir
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+  /api/info:
+    get:
+      operationId: getInfo
+      tags: [console]
+      summary: Version, environnement et base de l'instance
+      responses:
+        "200":
+          description: Informations de l'instance
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Info"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          description: Le service démarre
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+  /api/auth/session:
+    get:
+      operationId: getSession
+      tags: [console]
+      summary: Session en cours, et s'il faut créer le premier administrateur
+      security: []
+      responses:
+        "200":
+          description: État de la session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Session"
+  /api/auth/setup:
+    post:
+      operationId: setup
+      tags: [console]
+      summary: Crée le premier administrateur avec le code affiché dans les journaux
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetupRequest"
+      responses:
+        "200":
+          $ref: "#/components/responses/SignedIn"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          description: L'administrateur existe déjà
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "429":
+          $ref: "#/components/responses/TooManyAttempts"
+  /api/auth/login:
+    post:
+      operationId: login
+      tags: [console]
+      summary: Connexion à la console
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          $ref: "#/components/responses/SignedIn"
+        "202":
+          description: Mot de passe accepté ; la double authentification suit
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MfaStep"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/TooManyAttempts"
+  /api/auth/logout:
+    post:
+      operationId: logout
+      tags: [console]
+      summary: Déconnexion
+      security: []
+      responses:
+        "204":
+          description: Déconnecté
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+  /api/auth/password:
+    post:
+      operationId: changePassword
+      tags: [console]
+      summary: Change le mot de passe du compte connecté
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PasswordChange"
+      responses:
+        "204":
+          description: Mot de passe changé
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /api/settings:
+    get:
+      operationId: getSettings
+      tags: [console]
+      summary: Tous les réglages, avec leur valeur et leur origine
+      responses:
+        "200":
+          description: Réglages
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SettingsPage"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    put:
+      operationId: updateSettings
+      tags: [console]
+      summary: Enregistre des réglages ; une valeur vide revient au défaut
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SettingsUpdate"
+      responses:
+        "200":
+          description: Réglages enregistrés
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SettingsPage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /api/try/analyze:
+    post:
+      operationId: tryAnalyze
+      tags: [console]
+      summary: Lit un modèle Word ; moteur possible et données d'exemple tirées de ses balises
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: "#/components/schemas/TryAnalyzeForm"
+      responses:
+        "200":
+          description: Modèle lu
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TryTemplate"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "413":
+          $ref: "#/components/responses/TooLarge"
+        "503":
+          $ref: "#/components/responses/Busy"
+  /api/try/render:
+    post:
+      operationId: tryRender
+      tags: [console]
+      summary: Produit le PDF d'un modèle avec des données JSON ; rien n'est enregistré
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: "#/components/schemas/TryRenderForm"
+      responses:
+        "200":
+          description: Document produit
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TryResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "413":
+          $ref: "#/components/responses/TooLarge"
+        "503":
+          $ref: "#/components/responses/Busy"
+  /api/keys:
+    get:
+      operationId: listApiKeys
+      tags: [console]
+      summary: Clés API des applications
+      responses:
+        "200":
+          description: Clés, les plus récentes d'abord
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ApiKey"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      operationId: createApiKey
+      tags: [console]
+      summary: Crée une clé ; son secret n'est affiché qu'une fois
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ApiKeyCreate"
+      responses:
+        "201":
+          description: Clé créée
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiKeyCreated"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /api/keys/{id}:
+    patch:
+      operationId: updateApiKey
+      tags: [console]
+      summary: Change le nom ou la limite d'appels d'une clé
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: integer, format: int64}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ApiKeyUpdate"
+      responses:
+        "200":
+          description: Clé enregistrée
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiKey"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      operationId: revokeApiKey
+      tags: [console]
+      summary: Révoque une clé, immédiatement
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        "204":
+          description: Clé révoquée
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: Clé inconnue
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+  /api/users:
+    get:
+      operationId: listUsers
+      tags: [console]
+      summary: Comptes de la console (administrateurs)
+      parameters:
+        - {name: q, in: query, description: "Texte cherché dans l'identifiant, le nom et l'e-mail", schema: {type: string}}
+        - {name: role, in: query, schema: {$ref: "#/components/schemas/Role"}}
+        - {name: active, in: query, schema: {type: boolean}}
+      responses:
+        "200":
+          description: Comptes
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/User"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    post:
+      operationId: createUser
+      tags: [console]
+      summary: Crée un compte avec un mot de passe provisoire
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserCreate"
+      responses:
+        "201":
+          description: Compte créé
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /api/users/{id}:
+    parameters:
+      - {name: id, in: path, required: true, schema: {type: integer, format: int64}}
+    patch:
+      operationId: updateUser
+      tags: [console]
+      summary: Change le nom, l'e-mail, le rôle, l'état ou le mot de passe d'un compte
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserUpdate"
+      responses:
+        "200":
+          description: Compte modifié
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      operationId: deleteUser
+      tags: [console]
+      summary: Supprime un compte
+      responses:
+        "204":
+          description: Compte supprimé
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/users/{id}/sessions:
+    delete:
+      operationId: revokeUserSessions
+      tags: [console]
+      summary: Déconnecte un compte de partout
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: integer, format: int64}}
+      responses:
+        "204":
+          description: Sessions fermées
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/me:
+    patch:
+      operationId: updateProfile
+      tags: [console]
+      summary: Change le prénom, le nom ou la langue du compte connecté
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProfileUpdate"
+      responses:
+        "200":
+          description: Profil enregistré
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /api/me/sessions/close-others:
+    post:
+      operationId: closeOtherSessions
+      tags: [console]
+      summary: Ferme les autres sessions du compte connecté
+      responses:
+        "200":
+          description: Sessions fermées
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [closed]
+                properties:
+                  closed:
+                    type: integer
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /api/renders:
+    get:
+      operationId: listRenders
+      tags: [console]
+      summary: Documents produits (sans leur contenu ni leurs données), les plus récents d'abord
+      parameters:
+        - {name: q, in: query, description: "Texte cherché dans le modèle, l'auteur et l'erreur", schema: {type: string}}
+        - {name: status, in: query, schema: {type: string, enum: [ok, refused, error]}}
+        - {name: source, in: query, schema: {type: string, enum: [console, api, mcp]}}
+        - {name: format, in: query, schema: {type: string, enum: [pdf, docx]}}
+        - {name: limit, in: query, schema: {type: integer, minimum: 1, maximum: 200, default: 50}}
+        - {name: offset, in: query, schema: {type: integer, minimum: 0, default: 0}}
+      responses:
+        "200":
+          description: Une page de l'historique
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RenderPage"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /api/audit:
+    get:
+      operationId: listAudit
+      tags: [console]
+      summary: Journal d'audit (administrateurs)
+      parameters:
+        - {name: q, in: query, description: Texte cherché partout, schema: {type: string}}
+        - {name: action, in: query, schema: {type: string}}
+        - {name: actor, in: query, schema: {type: string}}
+        - {name: limit, in: query, schema: {type: integer, minimum: 1, maximum: 200, default: 50}}
+        - {name: offset, in: query, schema: {type: integer, minimum: 0, default: 0}}
+      responses:
+        "200":
+          description: Une page du journal
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditPage"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /api/monitoring:
+    get:
+      operationId: getMonitoring
+      tags: [console]
+      summary: État du service en direct (administrateurs)
+      responses:
+        "200":
+          description: État du service
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Monitoring"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /api/branding:
+    get:
+      operationId: getBranding
+      tags: [console]
+      summary: Logo de l'entreprise affiché par la console (sans connexion)
+      responses:
+        "200":
+          description: Choix du logo
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Branding"
+    put:
+      operationId: updateBranding
+      tags: [console]
+      summary: Change le logo de l'entreprise (administrateurs)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BrandingUpdate"
+      responses:
+        "200":
+          description: Logo enregistré
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Branding"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /api/branding/logo:
+    get:
+      operationId: getBrandingLogo
+      tags: [console]
+      summary: Logo personnalisé de l'entreprise (sans connexion)
+      parameters:
+        - {name: v, in: query, description: Version du logo ; l'adresse versionnée se garde en cache, schema: {type: string}}
+      responses:
+        "200":
+          description: Le logo
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+            Content-Security-Policy:
+              schema:
+                type: string
+            X-Content-Type-Options:
+              schema:
+                type: string
+          content:
+            image/*:
+              schema:
+                type: string
+                format: binary
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/dashboard:
+    get:
+      operationId: getDashboard
+      tags: [console]
+      summary: Chiffres du tableau de bord (30 derniers jours)
+      responses:
+        "200":
+          description: Les chiffres
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Dashboard"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /api/mcp/info:
+    get:
+      operationId: getMcpInfo
+      tags: [console]
+      summary: Adresse et connexion du serveur MCP
+      responses:
+        "200":
+          description: Le serveur MCP
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/McpInfo"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /api/metrics/token:
+    get:
+      operationId: getMetricsToken
+      tags: [console]
+      summary: État du jeton Prometheus (administrateurs)
+      responses:
+        "200":
+          description: État du jeton
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MetricsToken"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    post:
+      operationId: createMetricsToken
+      tags: [console]
+      summary: Crée ou remplace le jeton Prometheus, montré une seule fois (administrateurs)
+      responses:
+        "200":
+          description: Le nouveau jeton
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MetricsToken"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          description: Jeton fixé par la variable METRICS_TOKEN
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+    delete:
+      operationId: revokeMetricsToken
+      tags: [console]
+      summary: Révoque le jeton Prometheus ; /metrics ne répond plus (administrateurs)
+      responses:
+        "200":
+          description: État du jeton
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MetricsToken"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          description: Jeton fixé par la variable METRICS_TOKEN
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+  /api/templates:
+    get:
+      operationId: listTemplates
+      tags: [console]
+      summary: Bibliothèque de modèles
+      parameters:
+        - {name: q, in: query, description: Texte cherché dans le chemin et la description, schema: {type: string}}
+      responses:
+        "200":
+          description: Les modèles
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/LibraryTemplate"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      operationId: createTemplate
+      tags: [console]
+      summary: Ajoute un modèle (ou un PDF fixe) à la bibliothèque (éditeurs)
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: "#/components/schemas/TemplateUpload"
+      responses:
+        "201":
+          description: Modèle ajouté
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TemplateDetail"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "413":
+          $ref: "#/components/responses/TooLarge"
+  /api/templates/import:
+    post:
+      operationId: importTemplates
+      tags: [console]
+      summary: Importe un zip de modèles, avec leurs PDF de référence (éditeurs)
+      description: |
+        Chemins du zip = chemins des modèles (acme/contracts/…/fiche_conseil.docx). Un fichier
+        X.reference.pdf et un fichier X.data.json à côté de X donnent la référence de comparaison.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: "#/components/schemas/TemplateImport"
+      responses:
+        "200":
+          description: Compte rendu
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ImportReport"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "413":
+          $ref: "#/components/responses/TooLarge"
+  /api/templates/export:
+    get:
+      operationId: exportTemplates
+      tags: [console]
+      summary: Zip des versions publiées, à importer dans un autre environnement
+      responses:
+        "200":
+          description: Le zip
+          headers:
+            Content-Disposition:
+              schema:
+                type: string
+          content:
+            application/zip:
+              schema:
+                type: string
+                format: binary
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /api/templates/check-all:
+    post:
+      operationId: checkAllTemplates
+      tags: [console]
+      summary: Compare tous les modèles publiés à leur PDF de référence, en arrière-plan (administrateurs)
+      responses:
+        "202":
+          description: Comparaison lancée
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [templates]
+                properties:
+                  templates:
+                    type: integer
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /api/templates/{id}:
+    parameters:
+      - {name: id, in: path, required: true, schema: {type: integer, format: int64}}
+    get:
+      operationId: getTemplate
+      tags: [console]
+      summary: Un modèle, ses versions et les données qu'il attend
+      responses:
+        "200":
+          description: Le modèle
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TemplateDetail"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      operationId: updateTemplate
+      tags: [console]
+      summary: Change la description ou le contrôle des données (éditeurs)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TemplateUpdate"
+      responses:
+        "200":
+          description: Modèle enregistré
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TemplateDetail"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      operationId: deleteTemplate
+      tags: [console]
+      summary: Supprime un modèle et toutes ses versions (administrateurs)
+      responses:
+        "204":
+          description: Supprimé
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/templates/{id}/versions:
+    parameters:
+      - {name: id, in: path, required: true, schema: {type: integer, format: int64}}
+    post:
+      operationId: addTemplateVersion
+      tags: [console]
+      summary: Ajoute une version d'un modèle (éditeurs)
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: "#/components/schemas/VersionUpload"
+      responses:
+        "201":
+          description: Version ajoutée
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TemplateDetail"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "413":
+          $ref: "#/components/responses/TooLarge"
+  /api/templates/{id}/publish:
+    parameters:
+      - {name: id, in: path, required: true, schema: {type: integer, format: int64}}
+    post:
+      operationId: publishTemplate
+      tags: [console]
+      summary: Publie une version (la plus récente, ou une ancienne pour revenir en arrière) (éditeurs)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [version]
+              properties:
+                version:
+                  type: integer
+      responses:
+        "200":
+          description: Version publiée
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TemplateDetail"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/templates/{id}/versions/{number}/file:
+    parameters:
+      - {name: id, in: path, required: true, schema: {type: integer, format: int64}}
+      - {name: number, in: path, required: true, schema: {type: integer}}
+    get:
+      operationId: downloadTemplateVersion
+      tags: [console]
+      summary: Fichier d'une version
+      responses:
+        "200":
+          description: Le fichier
+          headers:
+            Content-Disposition:
+              schema:
+                type: string
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/templates/{id}/versions/{number}/reference:
+    parameters:
+      - {name: id, in: path, required: true, schema: {type: integer, format: int64}}
+      - {name: number, in: path, required: true, schema: {type: integer}}
+    put:
+      operationId: setTemplateReference
+      tags: [console]
+      summary: Joint le PDF de référence (rendu Docmosis) et ses données à une version (éditeurs)
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: "#/components/schemas/ReferenceUpload"
+      responses:
+        "200":
+          description: Référence enregistrée
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TemplateDetail"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "413":
+          $ref: "#/components/responses/TooLarge"
+  /api/templates/{id}/versions/{number}/check:
+    parameters:
+      - {name: id, in: path, required: true, schema: {type: integer, format: int64}}
+      - {name: number, in: path, required: true, schema: {type: integer}}
+    post:
+      operationId: checkTemplateVersion
+      tags: [console]
+      summary: Produit la version avec les données de référence et la compare au PDF de référence (éditeurs)
+      responses:
+        "200":
+          description: Résultat
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CheckResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "503":
+          $ref: "#/components/responses/Busy"
+  /api/templates/{id}/versions/{number}/fast:
+    parameters:
+      - {name: id, in: path, required: true, schema: {type: integer, format: int64}}
+      - {name: number, in: path, required: true, schema: {type: integer}}
+    post:
+      operationId: qualifyTemplateVersion
+      tags: [console]
+      summary: Qualifie à nouveau la version pour le moteur rapide (éditeurs)
+      responses:
+        "200":
+          description: Résultat de la qualification
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FastStatus"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "503":
+          $ref: "#/components/responses/Busy"
+  /api/audit/export:
+    get:
+      operationId: exportAudit
+      tags: [console]
+      summary: Journal d'audit en CSV (administrateurs)
+      parameters:
+        - {name: q, in: query, schema: {type: string}}
+        - {name: action, in: query, schema: {type: string}}
+        - {name: actor, in: query, schema: {type: string}}
+      responses:
+        "200":
+          description: Le journal, 50 000 lignes au plus
+          headers:
+            Content-Disposition:
+              schema:
+                type: string
+          content:
+            text/csv:
+              schema:
+                type: string
+                format: binary
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /api/releases:
+    get:
+      operationId: listReleases
+      tags: [console]
+      summary: Notes de version, les plus récentes d'abord
+      parameters:
+        - {name: limit, in: query, schema: {type: integer, minimum: 1, maximum: 200, default: 10}}
+        - {name: offset, in: query, schema: {type: integer, minimum: 0, default: 0}}
+      responses:
+        "200":
+          description: Une page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReleasePage"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      operationId: createRelease
+      tags: [console]
+      summary: Publie une note de version (administrateurs)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReleaseInput"
+      responses:
+        "201":
+          description: Note publiée
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Release"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /api/releases/{id}:
+    parameters:
+      - {name: id, in: path, required: true, schema: {type: integer, format: int64}}
+    put:
+      operationId: updateRelease
+      tags: [console]
+      summary: Modifie une note de version (administrateurs)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReleaseInput"
+      responses:
+        "200":
+          description: Note enregistrée
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Release"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      operationId: deleteRelease
+      tags: [console]
+      summary: Supprime une note de version (administrateurs)
+      responses:
+        "204":
+          description: Supprimée
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/auth/mfa:
+    post:
+      operationId: loginMfa
+      tags: [console]
+      summary: Second temps de la connexion, code de l'application d'authentification (activation comprise)
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MfaCode"
+      responses:
+        "200":
+          $ref: "#/components/responses/SignedIn"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "410":
+          $ref: "#/components/responses/Gone"
+        "429":
+          $ref: "#/components/responses/TooManyAttempts"
+  /api/me/mfa:
+    post:
+      operationId: startMfa
+      tags: [console]
+      summary: Commence l'activation de la double authentification du compte connecté
+      responses:
+        "200":
+          description: Code QR et clé à saisir dans l'application
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MfaStep"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    delete:
+      operationId: disableMfa
+      tags: [console]
+      summary: Retire la double authentification (si le rôle ne l'impose pas)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MfaCode"
+      responses:
+        "204":
+          description: Retirée
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /api/me/mfa/confirm:
+    post:
+      operationId: confirmMfa
+      tags: [console]
+      summary: Termine l'activation avec un premier code
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MfaCode"
+      responses:
+        "204":
+          description: Activée
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /api/users/{id}/mfa:
+    delete:
+      operationId: resetUserMfa
+      tags: [console]
+      summary: Réinitialise la double authentification d'un compte (administrateurs)
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: integer, format: int64}}
+      responses:
+        "204":
+          description: Réinitialisée
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/me/sessions:
+    get:
+      operationId: listMySessions
+      tags: [console]
+      summary: Sessions ouvertes du compte connecté
+      responses:
+        "200":
+          description: Les sessions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/UserSession"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /api/me/sessions/{id}:
+    delete:
+      operationId: closeMySession
+      tags: [console]
+      summary: Ferme une session du compte connecté
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: string}}
+      responses:
+        "204":
+          description: Fermée
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/me/avatar:
+    put:
+      operationId: saveAvatar
+      tags: [console]
+      summary: Choisit l'icône et la couleur de l'avatar
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AvatarChoice"
+      responses:
+        "200":
+          description: Avatar enregistré
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /api/me/tokens:
+    get:
+      operationId: listMyTokens
+      tags: [console]
+      summary: Jetons personnels du compte connecté (MCP, scripts)
+      responses:
+        "200":
+          description: Les jetons
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/UserToken"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      operationId: createMyToken
+      tags: [console]
+      summary: Crée un jeton personnel ; son secret n'est montré qu'une fois
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserTokenCreate"
+      responses:
+        "201":
+          description: Jeton créé
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserTokenCreated"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /api/me/tokens/{id}:
+    delete:
+      operationId: revokeMyToken
+      tags: [console]
+      summary: Révoque un jeton personnel
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: integer, format: int64}}
+      responses:
+        "204":
+          description: Révoqué
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/mcp/calls:
+    get:
+      operationId: listMcpCalls
+      tags: [console]
+      summary: Appels MCP, les plus récents d'abord (les siens ; tous pour un administrateur)
+      parameters:
+        - {name: all, in: query, description: Tous les comptes (administrateurs), schema: {type: boolean}}
+        - {name: limit, in: query, schema: {type: integer, minimum: 1, maximum: 200, default: 50}}
+        - {name: offset, in: query, schema: {type: integer, minimum: 0, default: 0}}
+      responses:
+        "200":
+          description: Une page des appels
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/McpCallPage"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /api/renders/{id}/regenerate:
+    post:
+      operationId: regenerateRender
+      tags: [console]
+      summary: Produit à nouveau un document de l'historique, avec ses données et son modèle
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: integer, format: int64}}
+      responses:
+        "200":
+          description: Le document
+          headers:
+            Content-Disposition:
+              schema:
+                type: string
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+            application/vnd.openxmlformats-officedocument.wordprocessingml.document:
+              schema:
+                type: string
+                format: binary
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "503":
+          $ref: "#/components/responses/Busy"
+  /api/monitoring/alerts:
+    get:
+      operationId: getAlerts
+      tags: [console]
+      summary: Règles d'alerte, états et historique (administrateurs)
+      responses:
+        "200":
+          description: Les alertes
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlertsInfo"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    put:
+      operationId: saveAlerts
+      tags: [console]
+      summary: Enregistre les règles et les destinataires (administrateurs)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AlertConfig"
+      responses:
+        "200":
+          description: Enregistrées
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlertsInfo"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /api/monitoring/alerts/test:
+    post:
+      operationId: testAlert
+      tags: [console]
+      summary: Envoie une alerte d'essai aux destinataires (administrateurs)
+      responses:
+        "200":
+          description: Résultat de l'envoi
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlertTest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /api/templates/stats:
+    get:
+      operationId: listTemplateUses
+      tags: [console]
+      summary: Utilisation de chaque modèle sur une période
+      parameters:
+        - {name: days, in: query, schema: {type: integer, minimum: 1, maximum: 365, default: 30}}
+      responses:
+        "200":
+          description: Par modèle
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TemplateUse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /api/templates/{id}/stats:
+    get:
+      operationId: getTemplateStats
+      tags: [console]
+      summary: Statistiques d'un modèle
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: integer, format: int64}}
+        - {name: days, in: query, schema: {type: integer, minimum: 1, maximum: 365, default: 30}}
+      responses:
+        "200":
+          description: Les statistiques
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TemplateStats"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/templates/{id}/compare:
+    post:
+      operationId: compareTemplateVersions
+      tags: [console]
+      summary: Produit deux versions d'un modèle avec les mêmes données et montre les différences
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: integer, format: int64}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CompareRequest"
+      responses:
+        "200":
+          description: Les différences
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TemplateComparison"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "503":
+          $ref: "#/components/responses/Busy"
+  /api/templates/{id}/schedule:
+    parameters:
+      - {name: id, in: path, required: true, schema: {type: integer, format: int64}}
+    put:
+      operationId: scheduleTemplate
+      tags: [console]
+      summary: Programme la publication d'une version à une date
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ScheduleRequest"
+      responses:
+        "200":
+          description: Programmée
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TemplateDetail"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      operationId: unscheduleTemplate
+      tags: [console]
+      summary: Annule la publication programmée
+      responses:
+        "200":
+          description: Annulée
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TemplateDetail"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/templates/{id}/promotions:
+    parameters:
+      - {name: id, in: path, required: true, schema: {type: integer, format: int64}}
+    get:
+      operationId: listPromotions
+      tags: [console]
+      summary: Envois de ce modèle vers d'autres environnements
+      responses:
+        "200":
+          description: L'historique
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Promotion"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      operationId: promoteTemplate
+      tags: [console]
+      summary: Envoie une version de ce modèle à un autre environnement (INT vers REC vers PROD)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PromoteRequest"
+      responses:
+        "200":
+          description: Le résultat de l'envoi (status error si l'autre environnement a refusé)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Promotion"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/environments:
+    get:
+      operationId: listEnvironments
+      tags: [console]
+      summary: Environnements vers lesquels envoyer des modèles
+      responses:
+        "200":
+          description: Les environnements (clés masquées)
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Environment"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    put:
+      operationId: saveEnvironments
+      tags: [console]
+      summary: Enregistre les environnements (administrateurs) ; une clé masquée renvoyée telle quelle est gardée
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              maxItems: 10
+              items:
+                $ref: "#/components/schemas/Environment"
+      responses:
+        "200":
+          description: Enregistrés
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Environment"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /api/bundles:
+    get:
+      operationId: listBundles
+      tags: [console]
+      summary: Liasses de documents
+      responses:
+        "200":
+          description: Les liasses
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Bundle"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      operationId: createBundle
+      tags: [console]
+      summary: Crée une liasse (éditeurs)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BundleInput"
+      responses:
+        "201":
+          description: Créée
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Bundle"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /api/bundles/{id}:
+    parameters:
+      - {name: id, in: path, required: true, schema: {type: integer, format: int64}}
+    put:
+      operationId: updateBundle
+      tags: [console]
+      summary: Modifie une liasse (éditeurs)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BundleInput"
+      responses:
+        "200":
+          description: Enregistrée
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Bundle"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      operationId: deleteBundle
+      tags: [console]
+      summary: Supprime une liasse (éditeurs)
+      responses:
+        "204":
+          description: Supprimée
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/bundles/{id}/try:
+    post:
+      operationId: tryBundle
+      tags: [console]
+      summary: Produit une liasse avec des données d'essai (éditeurs)
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: integer, format: int64}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BundleRenderRequest"
+      responses:
+        "200":
+          description: La liasse
+          headers:
+            Content-Disposition:
+              schema:
+                type: string
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+            application/zip:
+              schema:
+                type: string
+                format: binary
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "503":
+          $ref: "#/components/responses/Busy"
+components:
+  securitySchemes:
+    apiKey:
+      type: http
+      scheme: bearer
+      description: Clé API créée dans la console (page Clés API), envoyée dans l'en-tête Authorization
+  responses:
+    SignedIn:
+      description: Connecté ; le cookie de session est posé
+      headers:
+        Set-Cookie:
+          schema:
+            type: string
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Session"
+    BadRequest:
+      description: Demande refusée
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    Unauthorized:
+      description: Connexion nécessaire, ou identifiants refusés
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    Forbidden:
+      description: Rôle insuffisant
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    NotFound:
+      description: Introuvable
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    TooManyRequests:
+      description: Trop d'appels pour cette clé ; réessayer après Retry-After secondes
+      headers:
+        Retry-After:
+          schema:
+            type: integer
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    TooManyAttempts:
+      description: Trop d'essais ; réessayer plus tard
+      headers:
+        Retry-After:
+          schema:
+            type: integer
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    TooLarge:
+      description: Fichier ou données trop gros (limites de la configuration)
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    Gone:
+      description: Demande expirée ; recommencer
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    Busy:
+      description: Moteur de rendu pas encore prêt, ou tous les workers occupés ; réessayer plus tard
+      headers:
+        Retry-After:
+          schema:
+            type: integer
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+  schemas:
+    Session:
+      type: object
+      required: [authenticated, setupRequired, instance]
+      properties:
+        authenticated:
+          type: boolean
+        setupRequired:
+          description: Aucun compte n'existe encore
+          type: boolean
+        instance:
+          type: string
+        user:
+          $ref: "#/components/schemas/User"
+    User:
+      type: object
+      required: [id, username, firstName, lastName, displayName, email, role, active, language, createdAt]
+      properties:
+        id:
+          type: integer
+          format: int64
+        username:
+          type: string
+        firstName:
+          type: string
+        lastName:
+          type: string
+        displayName:
+          description: Prénom et nom, ou l'identifiant s'ils manquent
+          type: string
+        email:
+          type: string
+        role:
+          $ref: "#/components/schemas/Role"
+        active:
+          type: boolean
+        language:
+          $ref: "#/components/schemas/Language"
+        createdAt:
+          type: string
+          format: date-time
+        lastLoginAt:
+          type: string
+          format: date-time
+        mfaEnabled:
+          type: boolean
+        mfaRequired:
+          description: Le rôle impose la double authentification
+          type: boolean
+        avatarIcon:
+          type: string
+        avatarColor:
+          type: string
+    Role:
+      description: admin = tout ; editor = essais et documents ; viewer = consultation
+      type: string
+      enum: [admin, editor, viewer]
+    Language:
+      type: string
+      enum: [fr, en, de, it]
+    UserCreate:
+      type: object
+      required: [username, firstName, lastName, role, password]
+      properties:
+        username:
+          type: string
+          maxLength: 100
+        firstName:
+          type: string
+          maxLength: 60
+        lastName:
+          type: string
+          maxLength: 60
+        email:
+          type: string
+          maxLength: 200
+        role:
+          $ref: "#/components/schemas/Role"
+        password:
+          description: Mot de passe provisoire, à changer par la personne
+          type: string
+          maxLength: 72
+    UserUpdate:
+      type: object
+      properties:
+        firstName:
+          type: string
+          maxLength: 60
+        lastName:
+          type: string
+          maxLength: 60
+        email:
+          type: string
+          maxLength: 200
+        role:
+          $ref: "#/components/schemas/Role"
+        active:
+          type: boolean
+        password:
+          description: Nouveau mot de passe provisoire ; ferme les sessions du compte
+          type: string
+          maxLength: 72
+    ProfileUpdate:
+      type: object
+      properties:
+        firstName:
+          type: string
+          maxLength: 60
+        lastName:
+          type: string
+          maxLength: 60
+        language:
+          $ref: "#/components/schemas/Language"
+    Branding:
+      type: object
+      required: [companyLogo]
+      properties:
+        companyLogo:
+          description: "none : aucun ; custom : logo envoyé par un administrateur"
+          type: string
+          enum: [none, custom]
+        version:
+          description: Version du logo personnalisé, à mettre dans son adresse
+          type: string
+    BrandingUpdate:
+      type: object
+      required: [companyLogo]
+      properties:
+        companyLogo:
+          type: string
+          enum: [none, custom]
+        image:
+          description: Logo en data URL (PNG, JPEG, WebP ou SVG sans script, 512 Ko au plus) ; requis pour passer à custom
+          type: string
+          maxLength: 720000
+    RenderEntry:
+      type: object
+      required: [id, createdAt, source, actor, template, format, status, size, durationMs, engine]
+      properties:
+        id:
+          type: integer
+          format: int64
+        createdAt:
+          type: string
+          format: date-time
+        source:
+          type: string
+          enum: [console, api, mcp]
+        actor:
+          description: Compte (console) ou nom de la clé (API, MCP)
+          type: string
+        template:
+          type: string
+        format:
+          type: string
+        status:
+          description: "ok : produit ; refused : modèle ou données refusés ; error : panne du service"
+          type: string
+          enum: [ok, refused, error]
+        error:
+          type: string
+        size:
+          type: integer
+          format: int64
+        durationMs:
+          type: integer
+        engine:
+          type: string
+        hasData:
+          description: Les données et le modèle sont gardés ; le document peut être produit à nouveau
+          type: boolean
+        requestId:
+          description: Identifiant de la demande, aussi présent dans les journaux
+          type: string
+        templateVersion:
+          type: integer
+        options:
+          description: Options appliquées (PDF/A, filigrane…)
+          type: string
+    RenderPage:
+      type: object
+      required: [items, total]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/RenderEntry"
+        total:
+          type: integer
+    AuditEntry:
+      type: object
+      required: [id, createdAt, actor, action, target, details, ip]
+      properties:
+        id:
+          type: integer
+          format: int64
+        createdAt:
+          type: string
+          format: date-time
+        actor:
+          type: string
+        action:
+          type: string
+        target:
+          type: string
+        details:
+          type: string
+        ip:
+          type: string
+    AuditPage:
+      type: object
+      required: [items, total, actions]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/AuditEntry"
+        total:
+          type: integer
+        actions:
+          description: Toutes les actions déjà journalisées, pour le filtre
+          type: array
+          items:
+            type: string
+    Monitoring:
+      type: object
+      required: [at, health, version, instance, uptimeSeconds, database, workers, memory, traffic, renders]
+      properties:
+        system:
+          $ref: "#/components/schemas/SystemUsage"
+        at:
+          type: string
+          format: date-time
+        health:
+          type: string
+          enum: [ok, degraded, down]
+        problems:
+          type: array
+          items:
+            type: string
+        version:
+          type: string
+        instance:
+          type: string
+        uptimeSeconds:
+          type: integer
+          format: int64
+        database:
+          type: object
+          required: [engine, ok, replication]
+          properties:
+            engine:
+              type: string
+            ok:
+              type: boolean
+            replication:
+              $ref: "#/components/schemas/Replication"
+        workers:
+          type: object
+          required: [ready, total, busy, queued]
+          properties:
+            ready:
+              type: boolean
+            total:
+              type: integer
+            busy:
+              type: integer
+            queued:
+              type: integer
+        memory:
+          type: object
+          required: [heapMb, systemMb, goroutines]
+          properties:
+            heapMb:
+              type: number
+            systemMb:
+              type: number
+            goroutines:
+              type: integer
+        traffic:
+          type: object
+          required: [requestsPerMinute, errorsPerMinute, series]
+          properties:
+            requestsPerMinute:
+              type: integer
+            errorsPerMinute:
+              type: integer
+            series:
+              type: array
+              items:
+                $ref: "#/components/schemas/TrafficPoint"
+        renders:
+          type: object
+          required: [lastHour, errorsLastHour, refusedLastHour, p50Ms, p95Ms, last24h, series]
+          properties:
+            lastHour:
+              description: Documents produits dans l'heure
+              type: integer
+            errorsLastHour:
+              description: Pannes du service dans l'heure
+              type: integer
+            refusedLastHour:
+              description: Demandes refusées (modèle ou données) dans l'heure
+              type: integer
+            p50Ms:
+              type: integer
+            p95Ms:
+              type: integer
+            last24h:
+              description: Documents produits en 24 heures
+              type: integer
+            series:
+              type: array
+              items:
+                $ref: "#/components/schemas/RenderPoint"
+    Dashboard:
+      description: Documents des 30 derniers jours, refus et pannes à part
+      type: object
+      required: [today, last7d, last30d, successRate, refused30d, errors30d, p50Ms, p95Ms, activeKeys, users, days, sources, topTemplates, topActors, recent]
+      properties:
+        today:
+          type: integer
+        last7d:
+          type: integer
+        last30d:
+          type: integer
+        successRate:
+          description: Documents produits sur documents demandés (refus compris), en %
+          type: number
+        refused30d:
+          type: integer
+        errors30d:
+          type: integer
+        p50Ms:
+          type: integer
+        p95Ms:
+          type: integer
+        activeKeys:
+          type: integer
+        users:
+          type: integer
+        days:
+          type: array
+          items:
+            $ref: "#/components/schemas/DayPoint"
+        sources:
+          type: array
+          items:
+            $ref: "#/components/schemas/NameCount"
+        topTemplates:
+          type: array
+          items:
+            $ref: "#/components/schemas/NameCount"
+        topActors:
+          type: array
+          items:
+            $ref: "#/components/schemas/NameCount"
+        recent:
+          type: array
+          items:
+            $ref: "#/components/schemas/RenderEntry"
+    DayPoint:
+      type: object
+      required: [date, ok, refused, errors]
+      properties:
+        date:
+          description: Jour (AAAA-MM-JJ, UTC)
+          type: string
+        ok:
+          type: integer
+        refused:
+          type: integer
+        errors:
+          type: integer
+    NameCount:
+      type: object
+      required: [name, count]
+      properties:
+        name:
+          type: string
+        count:
+          type: integer
+    McpInfo:
+      type: object
+      required: [available, serverName, url, transport, authHeader, version]
+      properties:
+        available:
+          type: boolean
+        serverName:
+          type: string
+        url:
+          type: string
+        transport:
+          type: string
+        authHeader:
+          type: string
+        version:
+          type: string
+    MetricsToken:
+      type: object
+      required: [configured, fromEnv]
+      properties:
+        configured:
+          type: boolean
+        fromEnv:
+          description: Fixé par la variable METRICS_TOKEN
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        createdBy:
+          type: string
+        token:
+          description: Le jeton, renvoyé une seule fois à sa création
+          type: string
+    TrafficPoint:
+      type: object
+      required: [t, requests, errors]
+      properties:
+        t:
+          type: string
+          format: date-time
+        requests:
+          type: integer
+        errors:
+          type: integer
+    RenderPoint:
+      description: Une minute ; count compte les documents produits et les pannes, pas les refus
+      type: object
+      required: [t, count, errors, p95Ms]
+      properties:
+        t:
+          type: string
+          format: date-time
+        count:
+          type: integer
+        errors:
+          type: integer
+        p95Ms:
+          type: integer
+    LoginRequest:
+      type: object
+      required: [username, password]
+      properties:
+        username:
+          type: string
+          maxLength: 100
+        password:
+          type: string
+          maxLength: 72
+    SetupRequest:
+      type: object
+      required: [setupCode, username, password]
+      properties:
+        setupCode:
+          type: string
+          maxLength: 20
+        username:
+          type: string
+          maxLength: 100
+        password:
+          type: string
+          maxLength: 72
+    PasswordChange:
+      type: object
+      required: [currentPassword, newPassword]
+      properties:
+        currentPassword:
+          type: string
+          maxLength: 72
+        newPassword:
+          type: string
+          maxLength: 72
+    SettingsPage:
+      type: object
+      required: [groups, startup]
+      properties:
+        groups:
+          type: array
+          items:
+            $ref: "#/components/schemas/SettingsGroup"
+        startup:
+          description: Réglages de démarrage, en lecture seule
+          type: array
+          items:
+            $ref: "#/components/schemas/StartupSetting"
+    SettingsGroup:
+      type: object
+      required: [id, label, settings]
+      properties:
+        id:
+          type: string
+        label:
+          type: string
+        settings:
+          type: array
+          items:
+            $ref: "#/components/schemas/Setting"
+    Setting:
+      type: object
+      required: [key, label, kind, value, default, source, locked, active, restart]
+      properties:
+        key:
+          type: string
+        label:
+          type: string
+        help:
+          type: string
+        kind:
+          type: string
+          enum: [text, number, toggle, choice, list]
+        value:
+          type: string
+        default:
+          type: string
+        options:
+          type: array
+          items:
+            type: string
+        min:
+          type: integer
+        max:
+          type: integer
+        source:
+          type: string
+          enum: [default, console, environment]
+        env:
+          description: Variable d'environnement qui peut fixer ce réglage
+          type: string
+        locked:
+          description: Fixé par sa variable d'environnement
+          type: boolean
+        active:
+          description: Faux tant que la fonction qui l'utilise n'existe pas
+          type: boolean
+        restart:
+          description: Prend effet au redémarrage
+          type: boolean
+    StartupSetting:
+      type: object
+      required: [key, label, value, source]
+      properties:
+        key:
+          type: string
+        label:
+          type: string
+        help:
+          type: string
+        value:
+          type: string
+        source:
+          type: string
+          enum: [default, file, environment]
+    SettingsUpdate:
+      type: object
+      required: [values]
+      properties:
+        values:
+          type: object
+          additionalProperties:
+            type: string
+    TryAnalyzeForm:
+      type: object
+      required: [template]
+      properties:
+        template:
+          description: Modèle Word (.docx) ou OpenDocument (.odt)
+          type: string
+          format: binary
+    RenderForm:
+      type: object
+      required: [data]
+      properties:
+        template:
+          description: Modèle Word (.docx) ou OpenDocument (.odt), avec ses balises Docmosis ; ou bien templateName
+          type: string
+          format: binary
+        templateName:
+          description: Chemin d'un modèle de la bibliothèque (version publiée)
+          type: string
+        data:
+          description: Données JSON du document (texte ou fichier)
+          type: string
+        format:
+          description: Format du document produit
+          type: string
+          enum: [pdf, docx]
+          default: pdf
+        outputName:
+          description: Nom du fichier rendu (Content-Disposition)
+          type: string
+        pdfa:
+          description: Norme d'archivage ; défaut du réglage « PDF/A par défaut »
+          type: string
+          enum: [none, PDF/A-1b, PDF/A-2b, PDF/A-3b]
+        accessible:
+          description: PDF balisé et conforme PDF/UA, lisible par les lecteurs d'écran
+          type: boolean
+        watermark:
+          description: Texte du filigrane ; « none » pour aucun ; défaut du réglage « Filigrane »
+          type: string
+          maxLength: 100
+        watermarkColor:
+          description: Couleur du filigrane, #RRGGBB
+          type: string
+        watermarkSize:
+          description: Taille du texte en points (0 = automatique)
+          type: integer
+        watermarkAngle:
+          description: Angle en degrés
+          type: integer
+        watermarkTiled:
+          description: Répéter le filigrane sur toute la page
+          type: boolean
+        dataCheck:
+          description: Contrôle des données attendues par le modèle ; défaut celui du modèle de la bibliothèque, sinon warn
+          type: string
+          enum: [off, warn, strict]
+        passwordProtect:
+          description: Mot de passe demandé à l'ouverture du PDF (pas avec PDF/A) ; jamais gardé dans l'historique
+          type: string
+          maxLength: 128
+        pdfRestrictPassword:
+          description: Mot de passe du propriétaire, qui active les restrictions pdfRestrict…
+          type: string
+          maxLength: 128
+        pdfRestrictPrinting:
+          description: 0 pas d'impression, 1 basse résolution, 2 pleine qualité (défaut)
+          type: integer
+          enum: [0, 1, 2]
+        pdfRestrictEditing:
+          description: 0 aucune modification … 4 tout sauf l'extraction de pages (défaut)
+          type: integer
+          enum: [0, 1, 2, 3, 4]
+        pdfRestrictCopy:
+          description: Interdire la copie du contenu
+          type: boolean
+        pdfRestrictAllowAccessibilty:
+          description: Interdire aussi l'accès des outils d'accessibilité (nom Docmosis)
+          type: boolean
+        pdfSkipEmptyPages:
+          description: Retirer les pages blanches ajoutées pour commencer sur une page paire ou impaire
+          type: boolean
+        title:
+          description: Titre du document (métadonnées du PDF)
+          type: string
+          maxLength: 500
+        author:
+          description: Auteur (métadonnées du PDF)
+          type: string
+          maxLength: 500
+        subject:
+          description: Sujet (métadonnées du PDF)
+          type: string
+          maxLength: 500
+        keywords:
+          description: Mots-clés, séparés par des virgules (métadonnées du PDF)
+          type: string
+          maxLength: 500
+        devMode:
+          description: Mode développeur (nom Docmosis) ; les données absentes et les expressions illisibles sont écrites en surbrillance dans le document
+          type: boolean
+    RenderOptions:
+      type: object
+      properties:
+        format:
+          type: string
+          enum: [pdf, docx]
+        pdfa:
+          type: string
+          enum: [none, PDF/A-1b, PDF/A-2b, PDF/A-3b]
+        accessible:
+          type: boolean
+        watermark:
+          $ref: "#/components/schemas/Watermark"
+        dataCheck:
+          type: string
+          enum: [off, warn, strict]
+        passwordProtect:
+          type: string
+          maxLength: 128
+        pdfRestrictPassword:
+          type: string
+          maxLength: 128
+        pdfRestrictPrinting:
+          type: integer
+          enum: [0, 1, 2]
+        pdfRestrictEditing:
+          type: integer
+          enum: [0, 1, 2, 3, 4]
+        pdfRestrictCopy:
+          type: boolean
+        pdfRestrictAllowAccessibilty:
+          type: boolean
+        pdfSkipEmptyPages:
+          type: boolean
+        title:
+          type: string
+          maxLength: 500
+        author:
+          type: string
+          maxLength: 500
+        subject:
+          type: string
+          maxLength: 500
+        keywords:
+          type: string
+          maxLength: 500
+        devMode:
+          type: boolean
+    Watermark:
+      type: object
+      properties:
+        text:
+          description: « none » pour aucun filigrane
+          type: string
+          maxLength: 100
+        color:
+          description: "#RRGGBB"
+          type: string
+        size:
+          type: integer
+        angle:
+          type: integer
+        tiled:
+          type: boolean
+    BatchRequest:
+      type: object
+      required: [documents]
+      properties:
+        documents:
+          type: array
+          minItems: 1
+          maxItems: 30
+          items:
+            $ref: "#/components/schemas/BatchItem"
+        merge:
+          description: Un seul PDF (par défaut) ; sinon un zip
+          type: boolean
+          default: true
+        outputName:
+          type: string
+        options:
+          $ref: "#/components/schemas/RenderOptions"
+    BatchItem:
+      type: object
+      properties:
+        templateName:
+          description: Modèle de la bibliothèque à remplir avec data
+          type: string
+        pdf:
+          description: PDF fixe de la bibliothèque à joindre tel quel
+          type: string
+        data:
+          type: object
+          additionalProperties: true
+        outputName:
+          description: Nom du document dans le zip (merge false)
+          type: string
+    DocmosisRender:
+      description: Corps d'un appel Docmosis Tornado /api/render ; les options PDF de Docmosis (passwordProtect, pdfRestrict…, pdfSkipEmptyPages, pdfWatermark…, pdfTagged, devMode) sont reprises
+      type: object
+      required: [templateName, outputName]
+      additionalProperties: true
+      properties:
+        accessKey:
+          description: Clé API DocIbis (dib_…) ; sinon en-tête Authorization
+          type: string
+        templateName:
+          type: string
+        outputName:
+          description: Nom du document ; son extension donne le format (pdf, docx)
+          type: string
+        outputFormat:
+          type: string
+        data:
+          description: Données du document, objet JSON ou texte JSON
+    DocmosisRenderForm:
+      type: object
+      required: [templateName, outputName]
+      properties:
+        accessKey:
+          type: string
+        templateName:
+          type: string
+        outputName:
+          type: string
+        outputFormat:
+          type: string
+        data:
+          description: Texte JSON
+          type: string
+    DocmosisError:
+      type: object
+      required: [succeeded, shortMsg]
+      properties:
+        succeeded:
+          type: boolean
+        shortMsg:
+          type: string
+        longMsg:
+          type: string
+    LibraryTemplate:
+      type: object
+      required: [id, path, kind, description, published, versions, dataCheck, createdAt, createdBy, updatedAt]
+      properties:
+        id:
+          type: integer
+          format: int64
+        path:
+          type: string
+        kind:
+          description: template = modèle Word ; pdf = document fixe à joindre
+          type: string
+          enum: [template, pdf]
+        description:
+          type: string
+        published:
+          description: Version servie aux applications (0 = aucune)
+          type: integer
+        versions:
+          type: integer
+        dataCheck:
+          type: string
+          enum: [off, warn, strict]
+        engine:
+          type: string
+        hasReference:
+          type: boolean
+        check:
+          $ref: "#/components/schemas/CheckResult"
+        lint:
+          $ref: "#/components/schemas/LintSummary"
+        previousPublished:
+          description: Version publiée avant celle-ci (retour arrière), 0 si aucune
+          type: integer
+        scheduled:
+          $ref: "#/components/schemas/Scheduled"
+        fast:
+          $ref: "#/components/schemas/FastStatus"
+        createdAt:
+          type: string
+          format: date-time
+        createdBy:
+          type: string
+        updatedAt:
+          type: string
+          format: date-time
+    FastStatus:
+      description: >-
+        Moteur rapide d'une version : DocIbis rend une fois le fond du modèle puis pose les valeurs
+        par-dessus, après avoir vérifié au pixel près que le résultat est celui de LibreOffice.
+      type: object
+      required: [state, at]
+      properties:
+        state:
+          description: >-
+            qualified (le calque sert les PDF), refused (écart ou cas non couvert : LibreOffice sert),
+            standard (modèle hors de portée du calque), error (la qualification a échoué)
+          type: string
+          enum: [qualified, refused, standard, error]
+        reason:
+          description: Pourquoi le calque n'est pas utilisé
+          type: string
+        permille:
+          description: Plus grand écart de pixels mesuré avec LibreOffice, en pour mille
+          type: number
+        tests:
+          description: Nombre de jeux de données comparés
+          type: integer
+        overlayMs:
+          description: Durée d'un rendu par le calque, en millisecondes
+          type: number
+        standardMs:
+          description: Durée du même rendu par LibreOffice, en millisecondes
+          type: integer
+        at:
+          type: string
+          format: date-time
+    LibraryVersion:
+      type: object
+      required: [number, size, sha256, engine, note, createdAt, createdBy, hasReference]
+      properties:
+        number:
+          type: integer
+        size:
+          type: integer
+          format: int64
+        sha256:
+          type: string
+        engine:
+          type: string
+        note:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        createdBy:
+          type: string
+        hasReference:
+          type: boolean
+        check:
+          $ref: "#/components/schemas/CheckResult"
+        lint:
+          description: Vérifications du modèle ; absent tant qu'elles ne sont pas faites
+          type: array
+          items:
+            $ref: "#/components/schemas/LintIssue"
+        fast:
+          $ref: "#/components/schemas/FastStatus"
+    TemplateField:
+      type: object
+      required: [path, kind, optional]
+      properties:
+        path:
+          description: Chemin dans les données (client.nom, lignes[].montant)
+          type: string
+        kind:
+          type: string
+          enum: [text, flag, list, image]
+        optional:
+          description: Lu seulement dans des sections conditionnelles
+          type: boolean
+    TemplateDetail:
+      type: object
+      required: [template, versions, fields]
+      properties:
+        template:
+          $ref: "#/components/schemas/LibraryTemplate"
+        versions:
+          type: array
+          items:
+            $ref: "#/components/schemas/LibraryVersion"
+        fields:
+          description: Données attendues par la version publiée (ou la dernière)
+          type: array
+          items:
+            $ref: "#/components/schemas/TemplateField"
+        sample:
+          type: object
+          additionalProperties: true
+    TemplateContract:
+      type: object
+      required: [name, kind, version, fields]
+      properties:
+        name:
+          type: string
+        kind:
+          type: string
+          enum: [template, pdf]
+        version:
+          type: integer
+        description:
+          type: string
+        fields:
+          type: array
+          items:
+            $ref: "#/components/schemas/TemplateField"
+        sample:
+          type: object
+          additionalProperties: true
+    TemplateUpload:
+      type: object
+      required: [path, file]
+      properties:
+        path:
+          description: Chemin utilisé par les applications (acme/contracts/…/fiche_conseil.docx)
+          type: string
+        file:
+          type: string
+          format: binary
+        description:
+          type: string
+        note:
+          type: string
+        publish:
+          description: Publier tout de suite (par défaut oui)
+          type: boolean
+    VersionUpload:
+      type: object
+      required: [file]
+      properties:
+        file:
+          type: string
+          format: binary
+        note:
+          type: string
+        publish:
+          type: boolean
+    ReferenceUpload:
+      type: object
+      required: [reference, data]
+      properties:
+        reference:
+          description: PDF produit par Docmosis avec les mêmes données
+          type: string
+          format: binary
+        data:
+          description: Données JSON utilisées pour la référence
+          type: string
+    TemplateImport:
+      type: object
+      required: [file]
+      properties:
+        file:
+          description: Zip des modèles
+          type: string
+          format: binary
+        publish:
+          type: boolean
+    TemplateUpdate:
+      type: object
+      properties:
+        description:
+          type: string
+          maxLength: 500
+        dataCheck:
+          type: string
+          enum: [off, warn, strict]
+    ImportReport:
+      type: object
+      required: [created, updated, unchanged, references, errors]
+      properties:
+        created:
+          type: integer
+        updated:
+          type: integer
+        unchanged:
+          type: integer
+        references:
+          type: integer
+        errors:
+          type: array
+          items:
+            type: string
+    CheckResult:
+      description: Comparaison au PDF de référence, page par page
+      type: object
+      required: [at, version, ok, pages, threshold]
+      properties:
+        at:
+          type: string
+          format: date-time
+        version:
+          description: Version de DocIbis qui a fait la comparaison
+          type: string
+        ok:
+          type: boolean
+        pages:
+          type: integer
+        referencePages:
+          type: integer
+        permille:
+          description: Écart par page, en pour mille des pixels
+          type: array
+          items:
+            type: number
+        threshold:
+          description: Écart toléré, en pour mille
+          type: number
+        error:
+          type: string
+    Release:
+      type: object
+      required: [id, version, title, content, createdBy, createdAt, updatedAt]
+      properties:
+        id:
+          type: integer
+          format: int64
+        version:
+          type: string
+        title:
+          type: string
+        content:
+          description: Markdown
+          type: string
+        createdBy:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    ReleaseInput:
+      type: object
+      required: [version, title, content]
+      properties:
+        version:
+          type: string
+          maxLength: 40
+        title:
+          type: string
+          maxLength: 200
+        content:
+          type: string
+          maxLength: 20000
+    ReleasePage:
+      type: object
+      required: [items, total]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Release"
+        total:
+          type: integer
+    ApiKey:
+      type: object
+      required: [id, name, prefix, scopes, createdBy, createdAt, status]
+      properties:
+        id:
+          type: integer
+          format: int64
+        name:
+          description: Application qui utilise la clé
+          type: string
+        prefix:
+          description: Début visible de la clé, pour la reconnaître
+          type: string
+        scopes:
+          type: array
+          items:
+            type: string
+            enum: [render, templates]
+        createdBy:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        expiresAt:
+          type: string
+          format: date-time
+        lastUsedAt:
+          type: string
+          format: date-time
+        revokedAt:
+          type: string
+          format: date-time
+        ratePerMinute:
+          description: Appels permis par minute ; 0 = réglage « Appels par minute et par clé »
+          type: integer
+        status:
+          type: string
+          enum: [active, expired, revoked]
+    ApiKeyCreate:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          maxLength: 100
+        receivesTemplates:
+          description: La clé peut aussi recevoir des modèles envoyés par un autre environnement (promotion)
+          type: boolean
+        expiresInDays:
+          description: Durée de vie ; défaut du réglage « Durée de vie des clés API »
+          type: integer
+          minimum: 1
+          maximum: 1825
+        ratePerMinute:
+          type: integer
+          minimum: 0
+          maximum: 100000
+    ApiKeyUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+          maxLength: 100
+        ratePerMinute:
+          type: integer
+          minimum: 0
+          maximum: 100000
+    ApiKeyCreated:
+      type: object
+      required: [key, secret]
+      properties:
+        key:
+          $ref: "#/components/schemas/ApiKey"
+        secret:
+          description: La clé complète, affichée cette seule fois
+          type: string
+    TryRenderForm:
+      type: object
+      required: [data]
+      properties:
+        template:
+          description: Modèle Word (.docx) ou OpenDocument (.odt) ; ou bien templateName
+          type: string
+          format: binary
+        templateName:
+          description: Chemin d'un modèle de la bibliothèque (version publiée)
+          type: string
+        data:
+          description: Données JSON du document
+          type: string
+        pdfa:
+          type: string
+          enum: [none, PDF/A-1b, PDF/A-2b, PDF/A-3b]
+        accessible:
+          type: boolean
+        watermark:
+          type: string
+        watermarkColor:
+          type: string
+        watermarkSize:
+          type: integer
+        watermarkAngle:
+          type: integer
+        watermarkTiled:
+          type: boolean
+        passwordProtect:
+          type: string
+          maxLength: 128
+        pdfRestrictPassword:
+          type: string
+          maxLength: 128
+        pdfRestrictPrinting:
+          type: integer
+          enum: [0, 1, 2]
+        pdfRestrictEditing:
+          type: integer
+          enum: [0, 1, 2, 3, 4]
+        pdfRestrictCopy:
+          type: boolean
+        pdfRestrictAllowAccessibilty:
+          type: boolean
+        pdfSkipEmptyPages:
+          type: boolean
+        title:
+          type: string
+          maxLength: 500
+        author:
+          type: string
+          maxLength: 500
+        subject:
+          type: string
+          maxLength: 500
+        keywords:
+          type: string
+          maxLength: 500
+        devMode:
+          type: boolean
+    TryTemplate:
+      type: object
+      required: [name, size, prepareMs, analysis, sample]
+      properties:
+        name:
+          type: string
+        size:
+          description: Taille du fichier, en octets
+          type: integer
+        prepareMs:
+          description: Préparation par LibreOffice (Word vers ODT) ; 0 si déjà faite
+          type: integer
+        analysis:
+          $ref: "#/components/schemas/TemplateAnalysis"
+        sample:
+          description: Données d'exemple, une valeur par balise
+          type: object
+          additionalProperties: true
+        lint:
+          type: array
+          items:
+            $ref: "#/components/schemas/LintIssue"
+        fields:
+          type: array
+          items:
+            $ref: "#/components/schemas/TemplateField"
+    TemplateAnalysis:
+      type: object
+      required: [fields, flowFields, checkboxes, sections, blockSections, repeats, images, shapes, tables, engine, reason]
+      properties:
+        fields:
+          type: integer
+        flowFields:
+          description: Champs suivis de texte sur leur ligne
+          type: integer
+        checkboxes:
+          type: integer
+        sections:
+          type: integer
+        blockSections:
+          description: Sections sur plusieurs paragraphes
+          type: integer
+        repeats:
+          type: integer
+        images:
+          type: integer
+        shapes:
+          description: Formes et zones de texte positionnées
+          type: integer
+        tables:
+          type: integer
+        unsupported:
+          description: Balises que DocIbis ne sait pas encore traiter
+          type: array
+          items:
+            type: string
+        engine:
+          description: Moteur possible (overlay = calque, native = natif, standard = LibreOffice)
+          type: string
+          enum: [overlay, native, standard]
+        reason:
+          type: string
+    TryResult:
+      type: object
+      required: [pdf, size, engine, prepareMs, mergeMs, renderMs, totalMs]
+      properties:
+        pdf:
+          description: Le PDF, en base64
+          type: string
+          contentEncoding: base64
+        size:
+          description: Taille du PDF, en octets
+          type: integer
+        engine:
+          description: Moteur utilisé, standard (LibreOffice) ou overlay (moteur rapide, calque posé sur un fond déjà rendu)
+          type: string
+          enum: [standard, overlay]
+        prepareMs:
+          description: Préparation par LibreOffice (Word vers ODT) ; 0 si déjà faite
+          type: integer
+        mergeMs:
+          description: Fusion des données dans le modèle
+          type: integer
+        renderMs:
+          description: Production du PDF par LibreOffice
+          type: integer
+        totalMs:
+          type: integer
+    Health:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [ok, ready]
+    Info:
+      type: object
+      required: [name, version, instance, database]
+      properties:
+        name:
+          type: string
+          examples: [DocIbis]
+        version:
+          type: string
+          examples: [0.1.0]
+        instance:
+          description: Environnement affiché dans l'en-tête de la console (INT, REC, PPROD, PROD)
+          type: string
+        database:
+          $ref: "#/components/schemas/DatabaseInfo"
+    DatabaseInfo:
+      type: object
+      required: [engine, replication]
+      properties:
+        engine:
+          type: string
+          enum: [sqlite, postgres]
+        replication:
+          $ref: "#/components/schemas/Replication"
+    Replication:
+      description: Copie continue de la base SQLite (Litestream)
+      type: object
+      required: [enabled, locked]
+      properties:
+        enabled:
+          type: boolean
+        target:
+          description: Destination de la copie, sans identifiants
+          type: string
+        locked:
+          description: Un verrou sur S3 garantit une seule tâche qui écrit
+          type: boolean
+        leaseLost:
+          description: Une autre tâche a pris la base ; celle-ci doit s'arrêter
+          type: boolean
+    Problem:
+      description: Erreur au format RFC 9457
+      type: object
+      required: [title, status]
+      properties:
+        type:
+          type: string
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+    MfaCode:
+      type: object
+      required: [code]
+      properties:
+        ticket:
+          description: Reçu à l'étape précédente (connexion ou début d'activation)
+          type: string
+        code:
+          description: Code à 6 chiffres de l'application d'authentification
+          type: string
+          maxLength: 10
+    MfaStep:
+      description: "code : saisir le code de l'application ; enroll : scanner le code QR puis saisir le premier code"
+      type: object
+      required: [step, ticket]
+      properties:
+        step:
+          type: string
+          enum: [code, enroll]
+        ticket:
+          type: string
+        secret:
+          description: Clé à saisir à la main si le code QR ne peut pas être scanné
+          type: string
+        otpauthUrl:
+          type: string
+        qrPng:
+          description: Code QR (data URL PNG)
+          type: string
+    UserSession:
+      type: object
+      required: [id, current, expiresAt]
+      properties:
+        id:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        lastUsedAt:
+          type: string
+          format: date-time
+        expiresAt:
+          type: string
+          format: date-time
+        userAgent:
+          type: string
+        current:
+          type: boolean
+    AvatarChoice:
+      type: object
+      required: [icon, color]
+      properties:
+        icon:
+          type: string
+          maxLength: 40
+        color:
+          type: string
+          maxLength: 20
+    UserToken:
+      type: object
+      required: [id, name, prefix, createdAt, status]
+      properties:
+        id:
+          type: integer
+          format: int64
+        name:
+          type: string
+        prefix:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        expiresAt:
+          type: string
+          format: date-time
+        lastUsedAt:
+          type: string
+          format: date-time
+        status:
+          type: string
+          enum: [active, expired, revoked]
+    UserTokenCreate:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          maxLength: 100
+        expiresInDays:
+          description: 0 ou absent pour la durée de vie des clés API
+          type: integer
+          minimum: 0
+          maximum: 1825
+    UserTokenCreated:
+      type: object
+      required: [token, secret]
+      properties:
+        token:
+          $ref: "#/components/schemas/UserToken"
+        secret:
+          description: Montré une seule fois
+          type: string
+    McpCall:
+      type: object
+      required: [id, createdAt, actor, via, method, status, durationMs]
+      properties:
+        id:
+          type: integer
+          format: int64
+        createdAt:
+          type: string
+          format: date-time
+        actor:
+          type: string
+        via:
+          description: "token : jeton personnel ; key : clé API"
+          type: string
+        method:
+          type: string
+        tool:
+          type: string
+        status:
+          type: string
+          enum: [ok, error]
+        error:
+          type: string
+        durationMs:
+          type: integer
+    McpCallPage:
+      type: object
+      required: [items, total]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/McpCall"
+        total:
+          type: integer
+    AlertRuleConfig:
+      type: object
+      required: [enabled, threshold, forMinutes]
+      properties:
+        enabled:
+          type: boolean
+        threshold:
+          type: number
+        forMinutes:
+          description: Durée pendant laquelle la condition doit durer avant l'alerte
+          type: integer
+          minimum: 0
+          maximum: 1440
+    AlertConfig:
+      type: object
+      required: [enabled, recipients, rules]
+      properties:
+        enabled:
+          type: boolean
+        recipients:
+          description: Adresses e-mail
+          type: array
+          maxItems: 50
+          items:
+            type: string
+            maxLength: 254
+        teamsWebhook:
+          description: Adresse du flux Teams (Workflows) ; masquée en lecture, la valeur masquée renvoyée telle quelle garde l'adresse enregistrée
+          type: string
+          maxLength: 2000
+        rules:
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/AlertRuleConfig"
+    AlertRule:
+      type: object
+      required: [id, unit, severity, min, max, defaults]
+      properties:
+        id:
+          type: string
+        unit:
+          type: string
+        severity:
+          type: string
+          enum: [warning, critical]
+        min:
+          type: number
+        max:
+          type: number
+        defaults:
+          $ref: "#/components/schemas/AlertRuleConfig"
+    AlertState:
+      type: object
+      required: [rule, state, severity, unit, value, threshold]
+      properties:
+        rule:
+          type: string
+        state:
+          type: string
+          enum: [ok, pending, firing, disabled]
+        severity:
+          type: string
+          enum: [warning, critical]
+        unit:
+          type: string
+        value:
+          type: number
+        threshold:
+          type: number
+        since:
+          type: string
+          format: date-time
+    AlertEvent:
+      type: object
+      required: [id, at, rule, state, severity, unit, value, threshold, notified]
+      properties:
+        id:
+          type: integer
+          format: int64
+        at:
+          type: string
+          format: date-time
+        rule:
+          type: string
+        state:
+          type: string
+          enum: [firing, resolved]
+        severity:
+          type: string
+          enum: [warning, critical]
+        unit:
+          type: string
+        value:
+          type: number
+        threshold:
+          type: number
+        notified:
+          description: Canaux prévenus (email, teams), vide si aucun
+          type: string
+    AlertsInfo:
+      type: object
+      required: [config, rules, states, events, emailConfigured, teamsConfigured]
+      properties:
+        config:
+          $ref: "#/components/schemas/AlertConfig"
+        rules:
+          type: array
+          items:
+            $ref: "#/components/schemas/AlertRule"
+        states:
+          type: array
+          items:
+            $ref: "#/components/schemas/AlertState"
+        events:
+          type: array
+          items:
+            $ref: "#/components/schemas/AlertEvent"
+        emailConfigured:
+          description: Serveur SMTP réglé dans la configuration
+          type: boolean
+        teamsConfigured:
+          type: boolean
+    AlertTest:
+      type: object
+      required: [sent]
+      properties:
+        sent:
+          description: Canaux qui ont accepté l'envoi
+          type: array
+          items:
+            type: string
+        errors:
+          type: array
+          items:
+            type: string
+    LintIssue:
+      type: object
+      required: [level, code, message]
+      properties:
+        level:
+          description: "error : le document sera faux ; warning : à vérifier ; info : bon à savoir"
+          type: string
+          enum: [error, warning, info]
+        code:
+          type: string
+        message:
+          type: string
+    LintSummary:
+      description: Vérifications de la dernière version
+      type: object
+      required: [errors, warnings, infos]
+      properties:
+        errors:
+          type: integer
+        warnings:
+          type: integer
+        infos:
+          type: integer
+    Scheduled:
+      type: object
+      required: [version, at]
+      properties:
+        version:
+          type: integer
+        at:
+          type: string
+          format: date-time
+        by:
+          type: string
+    ScheduleRequest:
+      type: object
+      required: [version, at]
+      properties:
+        version:
+          type: integer
+          minimum: 1
+        at:
+          type: string
+          format: date-time
+    TemplateUse:
+      type: object
+      required: [id, count, errors, refused]
+      properties:
+        id:
+          type: integer
+          format: int64
+        count:
+          type: integer
+        errors:
+          type: integer
+        refused:
+          type: integer
+        lastUsedAt:
+          type: string
+          format: date-time
+    TemplateStats:
+      type: object
+      required: [days, count, errors, refused, p50Ms, p95Ms, series, callers, versions]
+      properties:
+        days:
+          type: integer
+        count:
+          type: integer
+        errors:
+          type: integer
+        refused:
+          type: integer
+        p50Ms:
+          type: integer
+        p95Ms:
+          type: integer
+        lastUsedAt:
+          type: string
+          format: date-time
+        series:
+          description: Un point par jour, le plus ancien d'abord
+          type: array
+          items:
+            $ref: "#/components/schemas/TemplateDay"
+        callers:
+          description: Qui produit ce modèle, le plus actif d'abord
+          type: array
+          items:
+            $ref: "#/components/schemas/TemplateCaller"
+        versions:
+          type: array
+          items:
+            $ref: "#/components/schemas/VersionUse"
+        lastError:
+          type: string
+    CompareRequest:
+      type: object
+      required: [from, to]
+      properties:
+        from:
+          type: integer
+          minimum: 1
+        to:
+          type: integer
+          minimum: 1
+        data:
+          description: Données des deux documents ; par défaut l'exemple de la plus récente
+          type: object
+          additionalProperties: true
+    TemplateComparison:
+      type: object
+      required: [from, to, identical, pages, text]
+      properties:
+        from:
+          type: integer
+        to:
+          type: integer
+        identical:
+          type: boolean
+        pages:
+          type: array
+          items:
+            $ref: "#/components/schemas/ComparedPage"
+        text:
+          description: Lignes de texte retirées ou ajoutées, avec un peu de contexte
+          type: array
+          items:
+            $ref: "#/components/schemas/TextChange"
+    Environment:
+      type: object
+      required: [name, url]
+      properties:
+        name:
+          description: REC, PPROD, PROD…
+          type: string
+          maxLength: 20
+        url:
+          description: Adresse de l'autre DocIbis
+          type: string
+          maxLength: 300
+        key:
+          description: Clé API de l'autre DocIbis autorisée à recevoir des modèles ; masquée en lecture
+          type: string
+          maxLength: 200
+    PromoteRequest:
+      type: object
+      required: [environment, version]
+      properties:
+        environment:
+          type: string
+        version:
+          type: integer
+          minimum: 1
+        publish:
+          description: Publier la version à l'arrivée
+          type: boolean
+    Promotion:
+      type: object
+      required: [id, createdAt, version, environment, status, detail, actor]
+      properties:
+        id:
+          type: integer
+          format: int64
+        createdAt:
+          type: string
+          format: date-time
+        version:
+          type: integer
+        environment:
+          type: string
+        status:
+          type: string
+          enum: [ok, error]
+        detail:
+          type: string
+        actor:
+          type: string
+    BundleItem:
+      type: object
+      required: [template]
+      properties:
+        template:
+          description: Chemin d'un modèle ou d'un PDF fixe de la bibliothèque
+          type: string
+          maxLength: 300
+        condition:
+          description: Condition sur les données (comme cs_), par exemple options.assistance = true ; vide = toujours
+          type: string
+          maxLength: 500
+        dataPath:
+          description: Partie des données donnée au modèle (par exemple contrat) ; vide = toutes
+          type: string
+          maxLength: 200
+    BundleInput:
+      type: object
+      required: [name, items]
+      properties:
+        name:
+          description: Nom appelé par les applications (lettres, chiffres, - _ .)
+          type: string
+          maxLength: 100
+        description:
+          type: string
+          maxLength: 500
+        output:
+          description: "pdf : un seul PDF ; zip : un fichier par document"
+          type: string
+          enum: [pdf, zip]
+        items:
+          type: array
+          minItems: 1
+          maxItems: 30
+          items:
+            $ref: "#/components/schemas/BundleItem"
+    Bundle:
+      type: object
+      required: [id, name, description, output, items, createdAt, createdBy, updatedAt, updatedBy]
+      properties:
+        id:
+          type: integer
+          format: int64
+        name:
+          type: string
+        description:
+          type: string
+        output:
+          type: string
+          enum: [pdf, zip]
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/BundleItem"
+        createdAt:
+          type: string
+          format: date-time
+        createdBy:
+          type: string
+        updatedAt:
+          type: string
+          format: date-time
+        updatedBy:
+          type: string
+    BundleRenderRequest:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          additionalProperties: true
+        outputName:
+          type: string
+          maxLength: 200
+    SystemUsage:
+      description: Processeur et mémoire de la tâche de l'API (LibreOffice compris)
+      type: object
+      required: [cpuPct, memMb, series]
+      properties:
+        cpuPct:
+          description: Part du processeur alloué utilisée (dernière minute)
+          type: number
+        memMb:
+          type: number
+        memLimitMb:
+          type: number
+        cpuLimit:
+          description: Processeurs alloués
+          type: number
+        source:
+          type: string
+        series:
+          description: Une mesure par minute, la plus ancienne d'abord (24 h au plus)
+          type: array
+          items:
+            $ref: "#/components/schemas/SystemPoint"
+    SystemPoint:
+      type: object
+      required: [t, cpuAvg, cpuMax, memMb]
+      properties:
+        t:
+          type: string
+          format: date-time
+        cpuAvg:
+          type: number
+        cpuMax:
+          type: number
+        memMb:
+          type: number
+    TemplateDay:
+      type: object
+      required: [day, count, errors]
+      properties:
+        day:
+          type: string
+          format: date
+        count:
+          type: integer
+        errors:
+          type: integer
+    TemplateCaller:
+      type: object
+      required: [source, actor, count]
+      properties:
+        source:
+          type: string
+        actor:
+          type: string
+        count:
+          type: integer
+    VersionUse:
+      type: object
+      required: [version, count]
+      properties:
+        version:
+          type: integer
+        count:
+          type: integer
+    ComparedPage:
+      type: object
+      required: [number, permille]
+      properties:
+        number:
+          type: integer
+        permille:
+          description: Part des pixels différents, pour mille ; -1 si la page n'existe que d'un côté
+          type: number
+        before:
+          description: Page de la version from (PNG en data URL)
+          type: string
+        after:
+          description: Page de la version to, différences surlignées (PNG en data URL)
+          type: string
+    TextChange:
+      type: object
+      required: [op, line]
+      properties:
+        op:
+          type: string
+          enum: [same, removed, added]
+        line:
+          type: string

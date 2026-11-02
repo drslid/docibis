@@ -1,0 +1,7 @@
+package: httpapi
+output: api.gen.go
+generate:
+  echo5-server: true
+  strict-server: true
+  models: true
+  embedded-spec: true

@@ -1,0 +1,98 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { MemoryRouter } from 'react-router'
+import { describe, expect, it, vi } from 'vitest'
+import type { Info, TryResult, TryTemplate } from '@/api/generated/docibis'
+import { TryPage } from './TryPage'
+
+const info: Info = { name: 'DocIbis', version: '0.1.0', instance: 'INT', database: { engine: 'sqlite', replication: { enabled: false, locked: false } } }
+
+const template: TryTemplate = {
+  name: 'mandat.docx',
+  size: 58_000,
+  prepareMs: 120,
+  analysis: {
+    fields: 2, flowFields: 0, checkboxes: 1, sections: 0, blockSections: 0, repeats: 0, images: 0, shapes: 0, tables: 1,
+    engine: 'overlay', reason: 'mise en page fixe : 2 champs en bout de ligne, 1 case, 0 image',
+  },
+  sample: { client: { nom: 'Exemple nom' }, estClient: true },
+}
+
+const result: TryResult = { pdf: btoa('%PDF-1.7 test'), size: 13, engine: 'standard', prepareMs: 0, mergeMs: 3, renderMs: 151, totalMs: 160 }
+
+function stubApi() {
+  const answers: Record<string, unknown> = { '/api/info': info, '/api/try/analyze': template, '/api/try/render': result }
+  const fetch = vi.fn<(url: string, init?: RequestInit) => Promise<Response>>(async (url) =>
+    new Response(JSON.stringify(answers[url]), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+  vi.stubGlobal('fetch', fetch)
+  return fetch
+}
+
+async function openTemplate() {
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <MemoryRouter>
+        <TryPage />
+      </MemoryRouter>
+    </QueryClientProvider>,
+  )
+  fireEvent.change(screen.getByLabelText('Modèle Word'), { target: { files: [new File(['PK'], 'mandat.docx')] } })
+  expect(await screen.findByText('Calque possible')).toBeInTheDocument()
+}
+
+describe('TryPage', () => {
+  it('reads a template, fills the example data and shows the PDF', async () => {
+    const fetch = stubApi()
+    URL.createObjectURL = vi.fn(() => 'blob:pdf')
+    URL.revokeObjectURL = vi.fn()
+    await openTemplate()
+    expect(screen.getByLabelText('nom')).toHaveValue('Exemple nom')
+    expect(screen.getByLabelText('estClient')).toBeChecked()
+    fireEvent.change(screen.getByLabelText('nom'), { target: { value: 'Durand' } })
+    fireEvent.click(screen.getByRole('tab', { name: 'JSON' }))
+    expect((screen.getByLabelText('Données JSON') as HTMLTextAreaElement).value).toContain('"nom": "Durand"')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Produire le PDF' }))
+    expect(await screen.findByText('PDF produit en 160 ms')).toBeInTheDocument()
+    expect(screen.getByTitle('Aperçu du PDF')).toHaveAttribute('src', 'blob:pdf')
+    const sent = fetch.mock.calls.find(([url]) => url === '/api/try/render')?.[1]
+    expect((sent?.body as FormData).get('data')).toContain('Durand')
+  })
+
+  it('refuses data that is not a JSON object', async () => {
+    stubApi()
+    await openTemplate()
+    fireEvent.click(screen.getByRole('tab', { name: 'JSON' }))
+    fireEvent.change(screen.getByLabelText('Données JSON'), { target: { value: '[1, 2]' } })
+    expect(screen.getByText('Les données doivent être un objet JSON { … }.')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Produire le PDF' })).toBeDisabled()
+  })
+
+  it('produces a template of the library with a watermark', async () => {
+    const fiche = { id: 7, path: 'acme/fiche.docx', kind: 'template', published: 2, versions: 2 }
+    const answers: Record<string, unknown> = {
+      '/api/info': info, '/api/try/render': result, '/api/templates': [fiche, { ...fiche, id: 8, path: 'acme/cg.pdf', kind: 'pdf' }],
+      '/api/templates/7': { template: fiche, fields: [], versions: [], sample: { client: { nom: 'Bibliothèque' } } },
+    }
+    const fetch = vi.fn<(url: string, init?: RequestInit) => Promise<Response>>(async (url) => Response.json(answers[url]))
+    vi.stubGlobal('fetch', fetch)
+    URL.createObjectURL = vi.fn(() => 'blob:pdf')
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <MemoryRouter>
+          <TryPage />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    )
+    const pick = await screen.findByLabelText('Ou un modèle de la bibliothèque')
+    expect(screen.queryByRole('option', { name: 'acme/cg.pdf' })).not.toBeInTheDocument()
+    fireEvent.change(pick, { target: { value: 'acme/fiche.docx' } })
+    fireEvent.click(screen.getByRole('tab', { name: 'JSON' }))
+    await waitFor(() => expect((screen.getByLabelText('Données JSON') as HTMLTextAreaElement).value).toContain('Bibliothèque'))
+    fireEvent.change(screen.getByLabelText('Filigrane'), { target: { value: 'SPÉCIMEN' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Produire le PDF' }))
+    expect(await screen.findByText('PDF produit en 160 ms')).toBeInTheDocument()
+    const form = fetch.mock.calls.find(([url]) => url === '/api/try/render')?.[1]?.body as FormData
+    expect([form.get('templateName'), form.get('watermark'), form.get('template'), form.get('pdfa')]).toEqual(['acme/fiche.docx', 'SPÉCIMEN', null, null])
+  })
+})

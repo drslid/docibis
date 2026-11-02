@@ -1,0 +1,66 @@
+# DocIbis: install.sh writes .env next to this file, then runs
+#   docker compose up -d
+# Images come from GHCR; `docker compose up -d --build` builds them from apps/.
+name: docibis
+
+services:
+  api:
+    image: ${DOCIBIS_REGISTRY:-ghcr.io/drslid}/docibis-api:${DOCIBIS_VERSION:-latest}
+    build: ./apps/api
+    environment:
+      INSTANCE_NAME: ${INSTANCE_NAME:-PROD}
+      # 32 characters at least, kept outside the data volume: seals the
+      # second-factor secrets stored in the database.
+      APP_SECRET_KEY: ${APP_SECRET_KEY:?set APP_SECRET_KEY in .env (run install.sh)}
+      # Empty: SQLite in the data volume. postgres://… for PostgreSQL.
+      DATABASE_URL: ${DATABASE_URL:-}
+      # Optional continuous copy of the SQLite database: s3://bucket/prefix
+      # (AWS S3, Cloudflare R2, MinIO…), credentials as AWS_* variables.
+      STATE_URL: ${STATE_URL:-}
+      AWS_REGION: ${AWS_REGION:-}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      METRICS_TOKEN: ${METRICS_TOKEN:-}
+    volumes:
+      - data:/data
+      # Licensed fonts (Microsoft or corporate .ttf/.otf), read by LibreOffice.
+      - ${DOCIBIS_FONTS:-./fonts}:/usr/local/share/fonts/docibis:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+        required: false
+    restart: unless-stopped
+    stop_grace_period: 30s
+
+  web:
+    image: ${DOCIBIS_REGISTRY:-ghcr.io/drslid}/docibis-web:${DOCIBIS_VERSION:-latest}
+    build: ./apps/web
+    environment:
+      API_UPSTREAM: api:8080
+    ports:
+      - "${DOCIBIS_BIND:-0.0.0.0}:${DOCIBIS_PORT:-8080}:8080"
+    depends_on:
+      - api
+    restart: unless-stopped
+
+  # Started with COMPOSE_PROFILES=postgres (install.sh, PostgreSQL choice).
+  postgres:
+    image: public.ecr.aws/docker/library/postgres:18-alpine
+    profiles: [postgres]
+    environment:
+      POSTGRES_DB: docibis
+      POSTGRES_USER: docibis
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-}
+    volumes:
+      - postgres:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U docibis -d docibis"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    restart: unless-stopped
+
+volumes:
+  data:
+  postgres:
