@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <strong>Turn Word templates and JSON data into PDF and Word documents.</strong>
+  <strong>Send a Word template and JSON data, get a finished PDF back in one API call.</strong>
   <br>
   Free, open source and self-hosted, compatible with Docmosis templates, with a web console for the template library.
 </p>
@@ -77,6 +77,10 @@ curl -fsSL https://raw.githubusercontent.com/drslid/docibis/v0.1.0/install.sh \
 
 DocIbis is a document generation service. An application sends a Word template, or the name of a template kept in the DocIbis library, with JSON data; DocIbis merges them and returns a PDF or a Word document. Templates use the Docmosis tag syntax, so existing Docmosis templates and calls keep working. LibreOffice 26.8 lays out the pages.
 
+<p align="center">
+  <img src=".github/assets/screenshots/templates.png" alt="DocIbis template library: each template with its published version, checks and rendering engine" width="1200">
+</p>
+
 ```bash
 curl -H "Authorization: Bearer $DOCIBIS_API_KEY" \
   -F templateName=exemples/03-facture.docx \
@@ -98,6 +102,10 @@ curl -H "Authorization: Bearer $DOCIBIS_API_KEY" \
 - History of produced documents, statistics per template, alert rules by e-mail or Teams, Prometheus metrics.
 - Promotion of a template version from one DocIbis instance to another, for example from test to production.
 - Console in English, French, German and Italian, with a dark mode.
+
+<p align="center">
+  <img src=".github/assets/screenshots/template.png" alt="A DocIbis template page: published version, data check and the API call to copy into an application" width="1200">
+</p>
 
 ### Template syntax
 
