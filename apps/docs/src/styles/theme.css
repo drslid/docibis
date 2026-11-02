@@ -15,3 +15,12 @@
 	border: 1px solid var(--sl-color-gray-5);
 	border-radius: 0.5rem;
 }
+
+.hero > img {
+	max-width: 100%;
+	height: auto;
+	object-fit: contain;
+	border: 1px solid var(--sl-color-gray-5);
+	border-radius: 0.5rem;
+	box-shadow: 0 0.5rem 2rem rgb(0 0 0 / 0.12);
+}
