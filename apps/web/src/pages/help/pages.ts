@@ -79,6 +79,11 @@ Le filigrane ne se combine pas avec PDF/A ni avec le PDF accessible (LibreOffice
 se bloque) : la demande l'emporte sur la configuration, les deux demandés
 sont refusés. Un PDF/A ne peut pas avoir de mot de passe.
 
+Le PDF accessible est conforme PDF/UA-1 (vérifié avec veraPDF) : sans \`title\` ni titre
+dans le modèle, le nom du document lui sert de titre. Pour un PDF à la fois accessible et
+archivable, choisissez PDF/A-2b ou PDF/A-3b : avec PDF/A-1b, il reste balisé mais sans la
+marque PDF/UA.
+
 \`POST /v1/render/batch\` produit plusieurs documents en un appel (un contrat et
 ses conditions générales en PDF fixe de la bibliothèque, par exemple) et les
 joint en un seul PDF, ou les rend dans un zip.
@@ -171,6 +176,35 @@ ${calls}
 | 503 | Moteur occupé ou en démarrage : réessayer après \`Retry-After\` secondes. |
 
 Les erreurs sont en JSON (RFC 9457) : \`{"status": 400, "title": "Bad Request", "detail": "…"}\`.
+
+## En arrière-plan
+
+Pour les gros documents, les envois en nombre ou un dépôt direct sur S3 : \`POST ${origin}/v1/render/async\`, avec les mêmes champs que \`/v1/render\`. DocIbis vérifie la demande, répond tout de suite \`202\` avec un travail (\`{"id": "job_…", "status": "queued"}\`), puis produit le document.
+
+| Champ en plus | Contenu |
+|---|---|
+| \`callbackUrl\` | Adresse HTTPS appelée en \`POST\` à la fin (document prêt ou en échec), avec l'état du travail en JSON. |
+| \`uploadUrl\` | Adresse HTTPS où DocIbis dépose le document par \`PUT\` : une adresse S3 présignée, par exemple. |
+
+Un administrateur autorise les domaines de ces adresses (**Configuration**, **Rendu asynchrone**). Elles restent en mémoire, jamais dans la base ni dans les journaux.
+
+- \`GET /v1/jobs/{id}\` : l'état, \`queued\`, \`running\`, \`done\` ou \`failed\` (avec \`error\`).
+- \`GET /v1/jobs/{id}/document\` : le document, une fois prêt. Il est effacé après le délai de conservation (60 minutes par défaut), et n'est pas gardé s'il a été déposé à \`uploadUrl\`.
+
+Seule la clé qui a fait la demande lit le travail. Les demandes attendent en mémoire : un redémarrage du service les met en échec (état \`failed\`, avec rappel quand il s'arrête normalement), il suffit de les relancer.
+
+### Vérifier un rappel
+
+Chaque rappel porte \`X-DocIbis-Event\` (\`render.done\` ou \`render.failed\`), \`X-DocIbis-Timestamp\` (secondes Unix) et, quand la variable \`WEBHOOK_SECRET\` est posée sur le serveur, \`X-DocIbis-Signature: sha256=…\` : le HMAC-SHA256 du secret sur l'horodatage, un point, puis le corps reçu. Recalculez-le, comparez en temps constant et refusez un horodatage de plus de 5 minutes. En Python :
+
+\`\`\`python
+import hashlib, hmac, time
+
+def rappel_valide(secret: bytes, headers, body: bytes) -> bool:
+    ts = headers["X-DocIbis-Timestamp"]
+    attendu = "sha256=" + hmac.new(secret, ts.encode() + b"." + body, hashlib.sha256).hexdigest()
+    return abs(time.time() - int(ts)) < 300 and hmac.compare_digest(attendu, headers["X-DocIbis-Signature"])
+\`\`\`
 
 ## Autres langages
 
@@ -388,6 +422,6 @@ export const HELP_PAGES: HelpPage[] = [
   { slug: 'demarrer', title: 'Bien démarrer', summary: 'Rôles, essai d’un modèle, suivi de la production.', icon: BookOpen, colour: 'text-teal-500', content: () => start },
   { slug: 'syntaxe', title: 'Écrire un modèle', summary: 'Champs, formats, conditions, répétitions, images, codes QR, liasses.', icon: PenLine, colour: 'text-amber-500', content: syntax },
   { slug: 'docmosis', title: 'Passer de Docmosis à DocIbis', summary: 'Bibliothèque de modèles, route /api/render, références, options.', icon: FileStack, colour: 'text-blue-600', content: docmosis },
-  { slug: 'api', title: "Utiliser l'API", summary: 'Clé, appel de /v1/render, exemples en 7 langages, erreurs.', icon: Code2, colour: 'text-violet-500', content: api },
+  { slug: 'api', title: "Utiliser l'API", summary: 'Clé, appel de /v1/render, exemples en 7 langages, erreurs, rendu en arrière-plan.', icon: Code2, colour: 'text-violet-500', content: api },
   { slug: 'mcp', title: 'Serveur MCP', summary: 'Brancher Claude, VS Code ou Cursor sur DocIbis.', icon: Bot, colour: 'text-indigo-500', content: mcp },
 ]

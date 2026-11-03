@@ -44,6 +44,7 @@ func libraryTemplate(t store.Template) LibraryTemplate {
 		engine, has := t.Engine, t.HasReference
 		out.Engine, out.HasReference, out.Check = &engine, &has, checkResult(t.CheckResult)
 		out.Fast = fastStatus(t.Fast)
+		out.Native = nativeStatus(t.Native, t.NativeSHA256, 0, "", nil)
 	}
 	if t.Kind == "template" {
 		out.Lint = lintSummary(t.Lint)
@@ -69,7 +70,7 @@ func libraryVersion(v store.TemplateVersion) LibraryVersion {
 	return LibraryVersion{
 		Number: v.Number, Size: v.Size, Sha256: v.SHA256, Engine: v.Engine, Note: v.Note, HasReference: v.HasReference,
 		Check: checkResult(v.CheckResult), CreatedAt: v.CreatedAt, CreatedBy: v.CreatedBy, Lint: lintList(v.Lint),
-		Fast: fastStatus(v.Fast),
+		Fast: fastStatus(v.Fast), Native: nativeStatus(v.Native, v.NativeSHA256, len(v.NativeSource), v.NativeBy, v.NativeAt),
 	}
 }
 
@@ -233,6 +234,7 @@ func (s *Server) describeLater(ctx context.Context) {
 			s.describeQueued.Store(false)
 			s.describePending(ctx)
 			s.qualifyPending(ctx)
+			s.checkNativePending(ctx)
 			s.describing.Store(false)
 			if !s.describeQueued.Load() || !s.describing.CompareAndSwap(false, true) {
 				return
@@ -352,6 +354,15 @@ func (s *Server) CreateTemplate(ctx context.Context, req CreateTemplateRequestOb
 }
 
 func ptr[T any](v T) *T { return &v }
+
+// valueOf reads an optional value, its zero when absent.
+func valueOf[T any](p *T) T {
+	var zero T
+	if p == nil {
+		return zero
+	}
+	return *p
+}
 
 func (s *Server) GetTemplate(ctx context.Context, req GetTemplateRequestObject) (GetTemplateResponseObject, error) {
 	out, ok, err := s.detail(ctx, req.Id)
@@ -606,9 +617,23 @@ func (s *Server) CheckAllTemplates(ctx context.Context, _ CheckAllTemplatesReque
 	return CheckAllTemplates202JSONResponse{Templates: n}, nil
 }
 
-// importEntry is a template of an import with what goes with it.
+// importEntry is a template of an import with what goes with it. Its parts
+// stay packed in the zip until the template is imported, one at a time: the
+// zip may unpack to 1 GB, more than the memory of the task.
 type importEntry struct {
-	file, reference, data []byte
+	file, reference, data, native []byte
+	packed                        map[*[]byte]*zip.File
+}
+
+// unpack reads the parts of the entry from the zip.
+func (e *importEntry) unpack() error {
+	for target, zf := range e.packed {
+		var err error
+		if *target, err = readZip(zf, maxUnpacked); err != nil {
+			return refuse("Le zip est abîmé (%s).", zf.Name)
+		}
+	}
+	return nil
 }
 
 func (s *Server) ImportTemplates(ctx context.Context, req ImportTemplatesRequestObject) (ImportTemplatesResponseObject, error) {
@@ -627,14 +652,15 @@ func (s *Server) ImportTemplates(ctx context.Context, req ImportTemplatesRequest
 	me, _ := userFrom(ctx)
 	report := s.importTemplates(ctx, entries, me.Username, yes(f.values["publish"], true))
 	s.describeLater(context.WithoutCancel(ctx))
-	s.audit(ctx, me.Username, "template.import", "", fmt.Sprintf("%d créés, %d mis à jour, %d inchangés, %d références, %d erreurs",
-		report.Created, report.Updated, report.Unchanged, report.References, len(report.Errors)))
+	s.audit(ctx, me.Username, "template.import", "", fmt.Sprintf("%d créés, %d mis à jour, %d inchangés, %d références, %d copies Typst, %d erreurs",
+		report.Created, report.Updated, report.Unchanged, report.References, valueOf(report.Natives), len(report.Errors)))
 	return ImportTemplates200JSONResponse(report), nil
 }
 
 // readImport reads a zip of templates: each X.docx (or .odt, .pdf) may come
-// with X.reference.pdf, the PDF Docmosis made, and X.data.json, its data. A
-// leading templates/ folder is dropped.
+// with X.reference.pdf, the PDF Docmosis made, and X.data.json, its data,
+// and X.native.typ, its Typst copy for the native engine. A leading
+// templates/ folder is dropped.
 func readImport(raw []byte) (map[string]*importEntry, error) {
 	zr, err := zip.NewReader(bytes.NewReader(raw), int64(len(raw)))
 	if err != nil {
@@ -643,7 +669,7 @@ func readImport(raw []byte) (map[string]*importEntry, error) {
 	entries := map[string]*importEntry{}
 	entry := func(p string) *importEntry {
 		if entries[p] == nil {
-			entries[p] = &importEntry{}
+			entries[p] = &importEntry{packed: map[*[]byte]*zip.File{}}
 		}
 		return entries[p]
 	}
@@ -662,19 +688,26 @@ func readImport(raw []byte) (map[string]*importEntry, error) {
 			return nil, err
 		}
 		lower := strings.ToLower(p)
+		var e *importEntry
 		var target *[]byte
 		switch {
 		case strings.HasSuffix(lower, ".reference.pdf"):
-			target = &entry(p[:len(p)-len(".reference.pdf")]).reference
+			e = entry(p[:len(p)-len(".reference.pdf")])
+			target = &e.reference
 		case strings.HasSuffix(lower, ".data.json"):
-			target = &entry(p[:len(p)-len(".data.json")]).data
+			e = entry(p[:len(p)-len(".data.json")])
+			target = &e.data
+		case strings.HasSuffix(lower, ".native.typ"):
+			e = entry(p[:len(p)-len(".native.typ")])
+			target = &e.native
 		case strings.HasSuffix(lower, ".docx") || strings.HasSuffix(lower, ".odt") || strings.HasSuffix(lower, ".pdf"):
-			target = &entry(p).file
+			e = entry(p)
+			target = &e.file
 		default:
 			continue
 		}
-		if *target, err = readZip(zf, maxUnpacked); err != nil {
-			return nil, refuse("Le zip est abîmé (%s).", name)
+		if zf.UncompressedSize64 > 0 {
+			e.packed[target] = zf
 		}
 	}
 	if len(entries) == 0 {
@@ -686,7 +719,6 @@ func readImport(raw []byte) (map[string]*importEntry, error) {
 // importTemplates adds what changed: a new template, or a new version when
 // the file differs from the latest one. References go to the version served.
 func (s *Server) importTemplates(ctx context.Context, entries map[string]*importEntry, actor string, publish bool) ImportReport {
-	st := s.db.Load()
 	report := ImportReport{Errors: []string{}}
 	paths := make([]string, 0, len(entries))
 	for p := range entries {
@@ -695,40 +727,60 @@ func (s *Server) importTemplates(ctx context.Context, entries map[string]*import
 	slices.Sort(paths)
 	for _, p := range paths {
 		e := entries[p]
-		t, exists, err := st.TemplateByPath(ctx, p)
-		if err != nil {
-			report.Errors = append(report.Errors, fmt.Sprintf("%s : %v", p, err))
+		if err := e.unpack(); err != nil {
+			_, pb := s.failure(err)
+			report.Errors = append(report.Errors, p+" : "+trimmed(pb.Detail))
 			continue
 		}
-		if len(e.file) == 0 && !exists {
-			report.Errors = append(report.Errors, p+" : référence sans modèle.")
-			continue
-		}
-		if len(e.file) > 0 {
-			changed, err := s.importFile(ctx, &t, exists, p, e.file, actor, publish)
-			switch {
-			case err != nil:
-				_, pb := s.failure(err)
-				report.Errors = append(report.Errors, p+" : "+trimmed(pb.Detail))
-				continue
-			case !exists:
-				report.Created++
-			case changed:
-				report.Updated++
-			default:
-				report.Unchanged++
-			}
-		}
-		if len(e.reference) > 0 {
-			if err := s.importReference(ctx, t, e); err != nil {
-				_, pb := s.failure(err)
-				report.Errors = append(report.Errors, p+" (référence) : "+trimmed(pb.Detail))
-			} else {
-				report.References++
-			}
-		}
+		s.importOne(ctx, &report, p, e, actor, publish)
+		*e = importEntry{}
 	}
 	return report
+}
+
+// importOne imports a template of the zip and what goes with it.
+func (s *Server) importOne(ctx context.Context, report *ImportReport, p string, e *importEntry, actor string, publish bool) {
+	st := s.db.Load()
+	t, exists, err := st.TemplateByPath(ctx, p)
+	if err != nil {
+		report.Errors = append(report.Errors, fmt.Sprintf("%s : %v", p, err))
+		return
+	}
+	if len(e.file) == 0 && !exists {
+		report.Errors = append(report.Errors, p+" : référence sans modèle.")
+		return
+	}
+	if len(e.file) > 0 {
+		changed, err := s.importFile(ctx, &t, exists, p, e.file, actor, publish)
+		switch {
+		case err != nil:
+			_, pb := s.failure(err)
+			report.Errors = append(report.Errors, p+" : "+trimmed(pb.Detail))
+			return
+		case !exists:
+			report.Created++
+		case changed:
+			report.Updated++
+		default:
+			report.Unchanged++
+		}
+	}
+	if len(e.reference) > 0 {
+		if err := s.importReference(ctx, t, e); err != nil {
+			_, pb := s.failure(err)
+			report.Errors = append(report.Errors, p+" (référence) : "+trimmed(pb.Detail))
+		} else {
+			report.References++
+		}
+	}
+	if len(e.native) > 0 {
+		if changed, err := s.importNative(ctx, t, e.native, actor); err != nil {
+			_, pb := s.failure(err)
+			report.Errors = append(report.Errors, p+" (copie Typst) : "+trimmed(pb.Detail))
+		} else if changed {
+			report.Natives = ptr(valueOf(report.Natives) + 1)
+		}
+	}
 }
 
 func (s *Server) importFile(ctx context.Context, t *store.Template, exists bool, p string, raw []byte, actor string, publish bool) (bool, error) {
@@ -825,6 +877,11 @@ func (s *Server) ExportTemplates(ctx context.Context, _ ExportTemplatesRequestOb
 				return nil, err
 			}
 			if err := add(t.Path+".data.json", []byte(v.ReferenceData)); err != nil {
+				return nil, err
+			}
+		}
+		if v.NativeSource != "" {
+			if err := add(t.Path+".native.typ", []byte(v.NativeSource)); err != nil {
 				return nil, err
 			}
 		}

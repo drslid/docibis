@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
 import { keepPreviousData, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, CalendarClock, CircleAlert, CircleCheck, CircleX, Download, FileStack, GitCompare, Plus, Sparkles, Trash2, Undo2, Upload, X, Zap } from 'lucide-react'
+import { ArrowLeft, CalendarClock, CircleAlert, CircleCheck, CircleX, Download, FileStack, GitCompare, Plus, Rocket, Sparkles, Trash2, Undo2, Upload, X, Zap } from 'lucide-react'
 import {
   getGetTemplateQueryKey, getListTemplatesQueryKey, useAddTemplateVersion, useCheckAllTemplates, useCheckTemplateVersion, useCreateTemplate,
   useDeleteTemplate, useGetTemplate, useImportTemplates, useListTemplates, useListTemplateUses, usePublishTemplate, useScheduleTemplate,
@@ -18,6 +18,7 @@ import { TagCheatSheet } from '@/components/help/TagCheatSheet'
 import { CompareVersions } from '@/components/library/CompareVersions'
 import { FastPanel } from '@/components/library/FastPanel'
 import { LintBadge, LintList } from '@/components/library/LintList'
+import { NativePanel } from '@/components/library/NativePanel'
 import { PromotePanel } from '@/components/library/PromotePanel'
 import { TemplateStats } from '@/components/library/TemplateStats'
 import { atLeast, useMe } from '@/hooks/useMe'
@@ -38,13 +39,16 @@ const tones = {
 }
 
 /** The result of the comparison with the reference PDF. */
-/** The engine that produces the documents of a template: the overlay once qualified, else LibreOffice. */
+/** The engine that produces the documents of a template: the overlay, else the Typst copy, once qualified; else LibreOffice. */
 function EngineBadge({ tpl }: { tpl: LibraryTemplate }) {
   const { t } = useI18n()
   if (tpl.fast?.state === 'qualified') {
     return <span className="inline-flex items-center gap-1 text-green-700 dark:text-green-400 font-medium"><Zap className="w-3 h-3" />{t('fast.active')}</span>
   }
-  return <span className="text-gray-500 dark:text-gray-400" title={tpl.fast?.reason}>{t('try.engine.standard')}</span>
+  if (tpl.native?.state === 'qualified') {
+    return <span className="inline-flex items-center gap-1 text-green-700 dark:text-green-400 font-medium"><Rocket className="w-3 h-3" />{t('native.active')}</span>
+  }
+  return <span className="text-gray-500 dark:text-gray-400" title={tpl.native?.reason ?? tpl.fast?.reason}>{t('try.engine.standard')}</span>
 }
 
 function CheckBadge({ check, hasReference }: { check?: CheckResult; hasReference?: boolean }) {
@@ -403,6 +407,7 @@ export function TemplatePage() {
   const unschedule = useUnscheduleTemplate({ mutation: { onSuccess: set } })
   const back = usePublishTemplate({ mutation: { onSuccess: set } })
   const editor = atLeast(me, 'editor')
+  const admin = atLeast(me, 'admin')
 
   if (error) return <p className="text-sm text-red-700" role="alert">{message(error)}</p>
   if (isPending) return <p className="text-sm text-gray-500">{t('common.loading')}</p>
@@ -481,6 +486,10 @@ export function TemplatePage() {
 
       {tpl.kind === 'template' && (
         <FastPanel id={id} version={data.versions.find((v) => v.number === tpl.published)} editor={editor} />
+      )}
+
+      {tpl.kind === 'template' && (
+        <NativePanel id={id} version={data.versions.find((v) => v.number === tpl.published)} editor={editor} admin={admin} />
       )}
 
       {tpl.kind === 'template' && (

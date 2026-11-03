@@ -568,7 +568,7 @@ export interface RenderForm {
   outputName?: string;
   /** Norme d'archivage ; défaut du réglage « PDF/A par défaut » */
   pdfa?: RenderFormPdfa;
-  /** PDF balisé et conforme PDF/UA, lisible par les lecteurs d'écran */
+  /** PDF balisé et conforme PDF/UA-1, lisible par les lecteurs d'écran ; sans titre (title) ni titre dans le modèle, le nom du document sert de titre. Avec PDF/A, choisir PDF/A-2b ou 3b (PDF/A-1b reste balisé mais sans la marque PDF/UA) */
   accessible?: boolean;
   /**
      * Texte du filigrane ; « none » pour aucun ; défaut du réglage « Filigrane »
@@ -627,6 +627,88 @@ export interface RenderForm {
   keywords?: string;
   /** Mode développeur (nom Docmosis) ; les données absentes et les expressions illisibles sont écrites en surbrillance dans le document */
   devMode?: boolean;
+}
+
+export type RenderAsyncForm = RenderForm & {
+  /**
+     * Adresse HTTPS qui reçoit un POST JSON (RenderJob) quand le document est prêt ou en échec ; domaine autorisé dans la configuration
+     * @maxLength 4000
+     */
+  callbackUrl?: string;
+  /**
+     * Adresse HTTPS où DocIbis dépose le document par PUT (adresse S3 présignée, par exemple) ; domaine autorisé dans la configuration
+     * @maxLength 4000
+     */
+  uploadUrl?: string;
+};
+
+/**
+ * queued (en attente), running (en cours), done (prêt), failed (en échec)
+ */
+export type RenderJobStatus = typeof RenderJobStatus[keyof typeof RenderJobStatus];
+
+
+export const RenderJobStatus = {
+  queued: 'queued',
+  running: 'running',
+  done: 'done',
+  failed: 'failed',
+} as const;
+
+export type RenderJobFormat = typeof RenderJobFormat[keyof typeof RenderJobFormat];
+
+
+export const RenderJobFormat = {
+  pdf: 'pdf',
+  docx: 'docx',
+} as const;
+
+/**
+ * Dépôt vers uploadUrl
+ */
+export type RenderJobUpload = typeof RenderJobUpload[keyof typeof RenderJobUpload];
+
+
+export const RenderJobUpload = {
+  pending: 'pending',
+  done: 'done',
+  failed: 'failed',
+} as const;
+
+/**
+ * Rappel vers callbackUrl
+ */
+export type RenderJobCallback = typeof RenderJobCallback[keyof typeof RenderJobCallback];
+
+
+export const RenderJobCallback = {
+  pending: 'pending',
+  done: 'done',
+  failed: 'failed',
+} as const;
+
+/**
+ * Un document produit en arrière-plan
+ */
+export interface RenderJob {
+  id: string;
+  /** queued (en attente), running (en cours), done (prêt), failed (en échec) */
+  status: RenderJobStatus;
+  createdAt: string;
+  finishedAt?: string;
+  /** Après cette date, le travail et son document sont effacés */
+  expiresAt: string;
+  template: string;
+  format: RenderJobFormat;
+  /** Taille du document, en octets */
+  size?: number;
+  error?: string;
+  /** Adresse du document (GET, même clé), quand il est prêt */
+  documentUrl?: string;
+  /** Dépôt vers uploadUrl */
+  upload?: RenderJobUpload;
+  /** Rappel vers callbackUrl */
+  callback?: RenderJobCallback;
 }
 
 export type RenderOptionsFormat = typeof RenderOptionsFormat[keyof typeof RenderOptionsFormat];
@@ -853,6 +935,47 @@ export interface FastStatus {
   at: string;
 }
 
+/**
+ * pending (copie jointe, comparaison à faire), qualified (la copie sert les PDF), refused (écart avec LibreOffice : LibreOffice sert), error (la comparaison a échoué)
+ */
+export type NativeStatusState = typeof NativeStatusState[keyof typeof NativeStatusState];
+
+
+export const NativeStatusState = {
+  pending: 'pending',
+  qualified: 'qualified',
+  refused: 'refused',
+  error: 'error',
+} as const;
+
+/**
+ * Moteur natif d'une version : une copie Typst du modèle, écrite à la main pour cette version, produit le PDF sans LibreOffice tant qu'elle donne le même document au pixel près.
+ */
+export interface NativeStatus {
+  /** pending (copie jointe, comparaison à faire), qualified (la copie sert les PDF), refused (écart avec LibreOffice : LibreOffice sert), error (la comparaison a échoué) */
+  state: NativeStatusState;
+  /** Pourquoi la copie n'est pas utilisée */
+  reason?: string;
+  /** Plus grand écart de pixels mesuré avec LibreOffice, en pour mille */
+  permille?: number;
+  /** Nombre de jeux de données comparés */
+  tests?: number;
+  /** Durée d'un rendu par la copie Typst, en millisecondes */
+  nativeMs?: number;
+  /** Durée du même rendu par LibreOffice, en millisecondes */
+  standardMs?: number;
+  /** Date de la dernière comparaison */
+  at?: string;
+  /** Empreinte de la copie Typst */
+  sourceSha256: string;
+  /** Taille de la copie Typst, en octets */
+  sourceBytes?: number;
+  /** Qui a joint la copie */
+  by?: string;
+  /** Quand la copie a été jointe */
+  attachedAt?: string;
+}
+
 export interface LibraryTemplate {
   id: number;
   path: string;
@@ -871,9 +994,15 @@ export interface LibraryTemplate {
   previousPublished?: number;
   scheduled?: Scheduled;
   fast?: FastStatus;
+  native?: NativeStatus;
   createdAt: string;
   createdBy: string;
   updatedAt: string;
+}
+
+export interface NativeUpload {
+  /** Copie Typst du modèle (.typ), qui lit sys.inputs.data (les données JSON), sys.inputs.today (AAAA-MM-JJ, UTC) et sys.inputs.now */
+  source: Blob | File;
 }
 
 /**
@@ -908,6 +1037,7 @@ export interface LibraryVersion {
   /** Vérifications du modèle ; absent tant qu'elles ne sont pas faites */
   lint?: LintIssue[];
   fast?: FastStatus;
+  native?: NativeStatus;
 }
 
 export type TemplateFieldKind = typeof TemplateFieldKind[keyof typeof TemplateFieldKind];
@@ -1006,6 +1136,8 @@ export interface ImportReport {
   updated: number;
   unchanged: number;
   references: number;
+  /** Copies Typst jointes (X.docx.native.typ) */
+  natives?: number;
   errors: string[];
 }
 
@@ -1217,7 +1349,7 @@ export interface TryTemplate {
 }
 
 /**
- * Moteur utilisé, standard (LibreOffice) ou overlay (moteur rapide, calque posé sur un fond déjà rendu)
+ * Moteur utilisé, standard (LibreOffice), overlay (moteur rapide, calque posé sur un fond déjà rendu) ou native (copie Typst du modèle)
  */
 export type TryResultEngine = typeof TryResultEngine[keyof typeof TryResultEngine];
 
@@ -1225,6 +1357,7 @@ export type TryResultEngine = typeof TryResultEngine[keyof typeof TryResultEngin
 export const TryResultEngine = {
   standard: 'standard',
   overlay: 'overlay',
+  native: 'native',
 } as const;
 
 export interface TryResult {
@@ -1232,7 +1365,7 @@ export interface TryResult {
   pdf: string;
   /** Taille du PDF, en octets */
   size: number;
-  /** Moteur utilisé, standard (LibreOffice) ou overlay (moteur rapide, calque posé sur un fond déjà rendu) */
+  /** Moteur utilisé, standard (LibreOffice), overlay (moteur rapide, calque posé sur un fond déjà rendu) ou native (copie Typst du modèle) */
   engine: TryResultEngine;
   /** Préparation par LibreOffice (Word vers ODT) ; 0 si déjà faite */
   prepareMs: number;
@@ -1772,6 +1905,11 @@ export type TooLargeResponse = Problem;
 export type GoneResponse = Problem;
 
 /**
+ * Pas encore possible ; réessayer plus tard
+ */
+export type ConflictResponse = Problem;
+
+/**
  * Moteur de rendu pas encore prêt, ou tous les workers occupés ; réessayer plus tard
  */
 export type BusyResponse = Problem;
@@ -2111,6 +2249,375 @@ export const useRenderDocument = <TError = ErrorType<BadRequestResponse | Unauth
       > => {
       return useMutation(getRenderDocumentMutationOptions(options), queryClient);
     }
+
+export const getRenderDocumentAsyncUrl = () => {
+
+
+
+
+  return `/v1/render/async`
+}
+
+/**
+ * Mêmes champs que /v1/render ; la réponse arrive tout de suite (202) avec le numéro du
+ * travail. Le document se lit ensuite par GET /v1/jobs/{id}/document, pendant le délai du
+ * réglage « Conservation des documents ». callbackUrl reçoit un POST JSON à la fin
+ * (signé par X-DocIbis-Signature) ; uploadUrl reçoit le document par PUT (adresse S3
+ * présignée, par exemple). Ces deux adresses visent un domaine autorisé dans la
+ * configuration, en HTTPS.
+ *
+ *     curl -H "Authorization: Bearer $DOCIBIS_API_KEY" \
+ *       -F templateName=acme/contracts/broker/monthly/fiche_conseil.docx \
+ *       -F data=@donnees.json -F callbackUrl=https://app.exemple.fr/docibis \
+ *       https://<instance>/v1/render/async
+ * @summary Produit un document en arrière-plan
+ */
+export const renderDocumentAsync = async (renderAsyncForm: RenderAsyncForm, options?: Parameters<typeof apiFetch>[1]): Promise<RenderJob> => {
+    const formData = new FormData();
+if(renderAsyncForm.template !== undefined) {
+ formData.append(`template`, renderAsyncForm.template);
+ }
+if(renderAsyncForm.templateName !== undefined) {
+ formData.append(`templateName`, renderAsyncForm.templateName);
+ }
+formData.append(`data`, renderAsyncForm.data);
+if(renderAsyncForm.format !== undefined) {
+ formData.append(`format`, renderAsyncForm.format);
+ }
+if(renderAsyncForm.outputName !== undefined) {
+ formData.append(`outputName`, renderAsyncForm.outputName);
+ }
+if(renderAsyncForm.pdfa !== undefined) {
+ formData.append(`pdfa`, renderAsyncForm.pdfa);
+ }
+if(renderAsyncForm.accessible !== undefined) {
+ formData.append(`accessible`, renderAsyncForm.accessible.toString())
+ }
+if(renderAsyncForm.watermark !== undefined) {
+ formData.append(`watermark`, renderAsyncForm.watermark);
+ }
+if(renderAsyncForm.watermarkColor !== undefined) {
+ formData.append(`watermarkColor`, renderAsyncForm.watermarkColor);
+ }
+if(renderAsyncForm.watermarkSize !== undefined) {
+ formData.append(`watermarkSize`, renderAsyncForm.watermarkSize.toString())
+ }
+if(renderAsyncForm.watermarkAngle !== undefined) {
+ formData.append(`watermarkAngle`, renderAsyncForm.watermarkAngle.toString())
+ }
+if(renderAsyncForm.watermarkTiled !== undefined) {
+ formData.append(`watermarkTiled`, renderAsyncForm.watermarkTiled.toString())
+ }
+if(renderAsyncForm.dataCheck !== undefined) {
+ formData.append(`dataCheck`, renderAsyncForm.dataCheck);
+ }
+if(renderAsyncForm.passwordProtect !== undefined) {
+ formData.append(`passwordProtect`, renderAsyncForm.passwordProtect);
+ }
+if(renderAsyncForm.pdfRestrictPassword !== undefined) {
+ formData.append(`pdfRestrictPassword`, renderAsyncForm.pdfRestrictPassword);
+ }
+if(renderAsyncForm.pdfRestrictPrinting !== undefined) {
+ formData.append(`pdfRestrictPrinting`, renderAsyncForm.pdfRestrictPrinting.toString())
+ }
+if(renderAsyncForm.pdfRestrictEditing !== undefined) {
+ formData.append(`pdfRestrictEditing`, renderAsyncForm.pdfRestrictEditing.toString())
+ }
+if(renderAsyncForm.pdfRestrictCopy !== undefined) {
+ formData.append(`pdfRestrictCopy`, renderAsyncForm.pdfRestrictCopy.toString())
+ }
+if(renderAsyncForm.pdfRestrictAllowAccessibilty !== undefined) {
+ formData.append(`pdfRestrictAllowAccessibilty`, renderAsyncForm.pdfRestrictAllowAccessibilty.toString())
+ }
+if(renderAsyncForm.pdfSkipEmptyPages !== undefined) {
+ formData.append(`pdfSkipEmptyPages`, renderAsyncForm.pdfSkipEmptyPages.toString())
+ }
+if(renderAsyncForm.title !== undefined) {
+ formData.append(`title`, renderAsyncForm.title);
+ }
+if(renderAsyncForm.author !== undefined) {
+ formData.append(`author`, renderAsyncForm.author);
+ }
+if(renderAsyncForm.subject !== undefined) {
+ formData.append(`subject`, renderAsyncForm.subject);
+ }
+if(renderAsyncForm.keywords !== undefined) {
+ formData.append(`keywords`, renderAsyncForm.keywords);
+ }
+if(renderAsyncForm.devMode !== undefined) {
+ formData.append(`devMode`, renderAsyncForm.devMode.toString())
+ }
+
+if(renderAsyncForm.callbackUrl !== undefined) {
+ formData.append(`callbackUrl`, renderAsyncForm.callbackUrl);
+ }
+if(renderAsyncForm.uploadUrl !== undefined) {
+ formData.append(`uploadUrl`, renderAsyncForm.uploadUrl);
+ }
+
+  return apiFetch<RenderJob>(getRenderDocumentAsyncUrl(),
+  {
+    ...options,
+    method: 'POST'
+    ,
+    body: formData
+  }
+);}
+
+
+
+
+
+export const getRenderDocumentAsyncMutationKey = () => ['renderDocumentAsync'] as const;
+
+export const getRenderDocumentAsyncMutationOptions = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | NotFoundResponse | TooLargeResponse | TooManyRequestsResponse | BusyResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof renderDocumentAsync>>, TError,RenderDocumentAsyncMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof renderDocumentAsync>>, TError,RenderDocumentAsyncMutationVariables, TContext> => {
+
+const mutationKey = getRenderDocumentAsyncMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof renderDocumentAsync>>, RenderDocumentAsyncMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  renderDocumentAsync(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RenderDocumentAsyncMutationResult = NonNullable<Awaited<ReturnType<typeof renderDocumentAsync>>>
+    export type RenderDocumentAsyncMutationBody = RenderAsyncForm
+    export type RenderDocumentAsyncMutationError = ErrorType<BadRequestResponse | UnauthorizedResponse | NotFoundResponse | TooLargeResponse | TooManyRequestsResponse | BusyResponse>
+    export type RenderDocumentAsyncMutationVariables = {data: RenderAsyncForm}
+
+    /**
+ * @summary Produit un document en arrière-plan
+ */
+export const useRenderDocumentAsync = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | NotFoundResponse | TooLargeResponse | TooManyRequestsResponse | BusyResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof renderDocumentAsync>>, TError,RenderDocumentAsyncMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof renderDocumentAsync>>,
+        TError,
+        RenderDocumentAsyncMutationVariables,
+        TContext
+      > => {
+      return useMutation(getRenderDocumentAsyncMutationOptions(options), queryClient);
+    }
+
+export const getGetRenderJobUrl = (id: string,) => {
+
+
+
+
+  return `/v1/jobs/${id}`
+}
+
+/**
+ * @summary État d'un document produit en arrière-plan
+ */
+export const getRenderJob = async (id: string, options?: Parameters<typeof apiFetch>[1]): Promise<RenderJob> => {
+
+  return apiFetch<RenderJob>(getGetRenderJobUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetRenderJobQueryKey = (id: string,) => {
+    return [
+    `/v1/jobs/${id}`
+    ] as const;
+    }
+
+
+export const getGetRenderJobQueryOptions = <TData = Awaited<ReturnType<typeof getRenderJob>>, TError = ErrorType<UnauthorizedResponse | NotFoundResponse>>(id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getRenderJob>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetRenderJobQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getRenderJob>>> = ({ signal }) => getRenderJob(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getRenderJob>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetRenderJobQueryResult = NonNullable<Awaited<ReturnType<typeof getRenderJob>>>
+export type GetRenderJobQueryError = ErrorType<UnauthorizedResponse | NotFoundResponse>
+
+
+export function useGetRenderJob<TData = Awaited<ReturnType<typeof getRenderJob>>, TError = ErrorType<UnauthorizedResponse | NotFoundResponse>>(
+ id: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getRenderJob>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getRenderJob>>,
+          TError,
+          Awaited<ReturnType<typeof getRenderJob>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetRenderJob<TData = Awaited<ReturnType<typeof getRenderJob>>, TError = ErrorType<UnauthorizedResponse | NotFoundResponse>>(
+ id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getRenderJob>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getRenderJob>>,
+          TError,
+          Awaited<ReturnType<typeof getRenderJob>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetRenderJob<TData = Awaited<ReturnType<typeof getRenderJob>>, TError = ErrorType<UnauthorizedResponse | NotFoundResponse>>(
+ id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getRenderJob>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary État d'un document produit en arrière-plan
+ */
+
+export function useGetRenderJob<TData = Awaited<ReturnType<typeof getRenderJob>>, TError = ErrorType<UnauthorizedResponse | NotFoundResponse>>(
+ id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getRenderJob>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetRenderJobQueryOptions(id,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetRenderJobDocumentUrl = (id: string,) => {
+
+
+
+
+  return `/v1/jobs/${id}/document`
+}
+
+/**
+ * Répond 409 tant que le document n'est pas prêt, 404 une fois le délai de conservation passé.
+ * @summary Document produit en arrière-plan
+ */
+export const getRenderJobDocument = async (id: string, options?: Parameters<typeof apiFetch>[1]): Promise<Blob> => {
+
+  return apiFetch<Blob>(getGetRenderJobDocumentUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetRenderJobDocumentQueryKey = (id: string,) => {
+    return [
+    `/v1/jobs/${id}/document`
+    ] as const;
+    }
+
+
+export const getGetRenderJobDocumentQueryOptions = <TData = Awaited<ReturnType<typeof getRenderJobDocument>>, TError = ErrorType<UnauthorizedResponse | NotFoundResponse | ConflictResponse>>(id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getRenderJobDocument>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetRenderJobDocumentQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getRenderJobDocument>>> = ({ signal }) => getRenderJobDocument(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getRenderJobDocument>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetRenderJobDocumentQueryResult = NonNullable<Awaited<ReturnType<typeof getRenderJobDocument>>>
+export type GetRenderJobDocumentQueryError = ErrorType<UnauthorizedResponse | NotFoundResponse | ConflictResponse>
+
+
+export function useGetRenderJobDocument<TData = Awaited<ReturnType<typeof getRenderJobDocument>>, TError = ErrorType<UnauthorizedResponse | NotFoundResponse | ConflictResponse>>(
+ id: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getRenderJobDocument>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getRenderJobDocument>>,
+          TError,
+          Awaited<ReturnType<typeof getRenderJobDocument>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetRenderJobDocument<TData = Awaited<ReturnType<typeof getRenderJobDocument>>, TError = ErrorType<UnauthorizedResponse | NotFoundResponse | ConflictResponse>>(
+ id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getRenderJobDocument>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getRenderJobDocument>>,
+          TError,
+          Awaited<ReturnType<typeof getRenderJobDocument>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetRenderJobDocument<TData = Awaited<ReturnType<typeof getRenderJobDocument>>, TError = ErrorType<UnauthorizedResponse | NotFoundResponse | ConflictResponse>>(
+ id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getRenderJobDocument>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Document produit en arrière-plan
+ */
+
+export function useGetRenderJobDocument<TData = Awaited<ReturnType<typeof getRenderJobDocument>>, TError = ErrorType<UnauthorizedResponse | NotFoundResponse | ConflictResponse>>(
+ id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getRenderJobDocument>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetRenderJobDocumentQueryOptions(id,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getRenderBatchUrl = () => {
 
@@ -7041,6 +7548,347 @@ export const useQualifyTemplateVersion = <TError = ErrorType<UnauthorizedRespons
         TContext
       > => {
       return useMutation(getQualifyTemplateVersionMutationOptions(options), queryClient);
+    }
+
+export const getGetTemplateNativeUrl = (id: number,
+    number: number,) => {
+
+
+
+
+  return `/api/templates/${id}/versions/${number}/native`
+}
+
+/**
+ * @summary Copie Typst de la version (éditeurs)
+ */
+export const getTemplateNative = async (id: number,
+    number: number, options?: Parameters<typeof apiFetch>[1]): Promise<string> => {
+
+  return apiFetch<string>(getGetTemplateNativeUrl(id,number),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetTemplateNativeQueryKey = (id: number,
+    number: number,) => {
+    return [
+    `/api/templates/${id}/versions/${number}/native`
+    ] as const;
+    }
+
+
+export const getGetTemplateNativeQueryOptions = <TData = Awaited<ReturnType<typeof getTemplateNative>>, TError = ErrorType<UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>>(id: number,
+    number: number, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getTemplateNative>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetTemplateNativeQueryKey(id,number);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getTemplateNative>>> = ({ signal }) => getTemplateNative(id,number, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined && number !== null && number !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getTemplateNative>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetTemplateNativeQueryResult = NonNullable<Awaited<ReturnType<typeof getTemplateNative>>>
+export type GetTemplateNativeQueryError = ErrorType<UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>
+
+
+export function useGetTemplateNative<TData = Awaited<ReturnType<typeof getTemplateNative>>, TError = ErrorType<UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>>(
+ id: number,
+    number: number, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getTemplateNative>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getTemplateNative>>,
+          TError,
+          Awaited<ReturnType<typeof getTemplateNative>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetTemplateNative<TData = Awaited<ReturnType<typeof getTemplateNative>>, TError = ErrorType<UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>>(
+ id: number,
+    number: number, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getTemplateNative>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getTemplateNative>>,
+          TError,
+          Awaited<ReturnType<typeof getTemplateNative>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetTemplateNative<TData = Awaited<ReturnType<typeof getTemplateNative>>, TError = ErrorType<UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>>(
+ id: number,
+    number: number, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getTemplateNative>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Copie Typst de la version (éditeurs)
+ */
+
+export function useGetTemplateNative<TData = Awaited<ReturnType<typeof getTemplateNative>>, TError = ErrorType<UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>>(
+ id: number,
+    number: number, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getTemplateNative>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetTemplateNativeQueryOptions(id,number,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getSetTemplateNativeUrl = (id: number,
+    number: number,) => {
+
+
+
+
+  return `/api/templates/${id}/versions/${number}/native`
+}
+
+/**
+ * La copie produit les PDF à la place de LibreOffice seulement si elle donne le même document au pixel près pour les données d'exemple, de référence et leurs variantes. Une nouvelle version du modèle Word n'a pas de copie : LibreOffice la produit.
+ * @summary Joint une copie Typst écrite à la main pour cette version, puis la compare à LibreOffice (administrateurs)
+ */
+export const setTemplateNative = async (id: number,
+    number: number,
+    nativeUpload: NativeUpload, options?: Parameters<typeof apiFetch>[1]): Promise<NativeStatus> => {
+    const formData = new FormData();
+formData.append(`source`, nativeUpload.source);
+
+  return apiFetch<NativeStatus>(getSetTemplateNativeUrl(id,number),
+  {
+    ...options,
+    method: 'PUT'
+    ,
+    body: formData
+  }
+);}
+
+
+
+
+
+export const getSetTemplateNativeMutationKey = () => ['setTemplateNative'] as const;
+
+export const getSetTemplateNativeMutationOptions = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | TooLargeResponse | BusyResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof setTemplateNative>>, TError,SetTemplateNativeMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof setTemplateNative>>, TError,SetTemplateNativeMutationVariables, TContext> => {
+
+const mutationKey = getSetTemplateNativeMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof setTemplateNative>>, SetTemplateNativeMutationVariables> = (props) => {
+          const {id,number,data} = props ?? {};
+
+          return  setTemplateNative(id,number,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SetTemplateNativeMutationResult = NonNullable<Awaited<ReturnType<typeof setTemplateNative>>>
+    export type SetTemplateNativeMutationBody = NativeUpload
+    export type SetTemplateNativeMutationError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | TooLargeResponse | BusyResponse>
+    export type SetTemplateNativeMutationVariables = {id: number;number: number;data: NativeUpload}
+
+    /**
+ * @summary Joint une copie Typst écrite à la main pour cette version, puis la compare à LibreOffice (administrateurs)
+ */
+export const useSetTemplateNative = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | TooLargeResponse | BusyResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof setTemplateNative>>, TError,SetTemplateNativeMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof setTemplateNative>>,
+        TError,
+        SetTemplateNativeMutationVariables,
+        TContext
+      > => {
+      return useMutation(getSetTemplateNativeMutationOptions(options), queryClient);
+    }
+
+export const getCheckTemplateNativeUrl = (id: number,
+    number: number,) => {
+
+
+
+
+  return `/api/templates/${id}/versions/${number}/native`
+}
+
+/**
+ * @summary Compare à nouveau la copie Typst de la version à LibreOffice (éditeurs)
+ */
+export const checkTemplateNative = async (id: number,
+    number: number, options?: Parameters<typeof apiFetch>[1]): Promise<NativeStatus> => {
+
+  return apiFetch<NativeStatus>(getCheckTemplateNativeUrl(id,number),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getCheckTemplateNativeMutationKey = () => ['checkTemplateNative'] as const;
+
+export const getCheckTemplateNativeMutationOptions = <TError = ErrorType<UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | BusyResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof checkTemplateNative>>, TError,CheckTemplateNativeMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof checkTemplateNative>>, TError,CheckTemplateNativeMutationVariables, TContext> => {
+
+const mutationKey = getCheckTemplateNativeMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof checkTemplateNative>>, CheckTemplateNativeMutationVariables> = (props) => {
+          const {id,number} = props ?? {};
+
+          return  checkTemplateNative(id,number,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CheckTemplateNativeMutationResult = NonNullable<Awaited<ReturnType<typeof checkTemplateNative>>>
+
+    export type CheckTemplateNativeMutationError = ErrorType<UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | BusyResponse>
+    export type CheckTemplateNativeMutationVariables = {id: number;number: number}
+
+    /**
+ * @summary Compare à nouveau la copie Typst de la version à LibreOffice (éditeurs)
+ */
+export const useCheckTemplateNative = <TError = ErrorType<UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | BusyResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof checkTemplateNative>>, TError,CheckTemplateNativeMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof checkTemplateNative>>,
+        TError,
+        CheckTemplateNativeMutationVariables,
+        TContext
+      > => {
+      return useMutation(getCheckTemplateNativeMutationOptions(options), queryClient);
+    }
+
+export const getDeleteTemplateNativeUrl = (id: number,
+    number: number,) => {
+
+
+
+
+  return `/api/templates/${id}/versions/${number}/native`
+}
+
+/**
+ * @summary Retire la copie Typst de la version, LibreOffice la produit de nouveau (administrateurs)
+ */
+export const deleteTemplateNative = async (id: number,
+    number: number, options?: Parameters<typeof apiFetch>[1]): Promise<void> => {
+
+  return apiFetch<void>(getDeleteTemplateNativeUrl(id,number),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDeleteTemplateNativeMutationKey = () => ['deleteTemplateNative'] as const;
+
+export const getDeleteTemplateNativeMutationOptions = <TError = ErrorType<UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteTemplateNative>>, TError,DeleteTemplateNativeMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteTemplateNative>>, TError,DeleteTemplateNativeMutationVariables, TContext> => {
+
+const mutationKey = getDeleteTemplateNativeMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteTemplateNative>>, DeleteTemplateNativeMutationVariables> = (props) => {
+          const {id,number} = props ?? {};
+
+          return  deleteTemplateNative(id,number,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteTemplateNativeMutationResult = NonNullable<Awaited<ReturnType<typeof deleteTemplateNative>>>
+
+    export type DeleteTemplateNativeMutationError = ErrorType<UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>
+    export type DeleteTemplateNativeMutationVariables = {id: number;number: number}
+
+    /**
+ * @summary Retire la copie Typst de la version, LibreOffice la produit de nouveau (administrateurs)
+ */
+export const useDeleteTemplateNative = <TError = ErrorType<UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteTemplateNative>>, TError,DeleteTemplateNativeMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof deleteTemplateNative>>,
+        TError,
+        DeleteTemplateNativeMutationVariables,
+        TContext
+      > => {
+      return useMutation(getDeleteTemplateNativeMutationOptions(options), queryClient);
     }
 
 export const getExportAuditUrl = (params?: ExportAuditParams,) => {

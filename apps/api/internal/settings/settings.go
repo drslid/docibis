@@ -53,6 +53,8 @@ var Groups = []Group{
 	{"rendering", "Moteur de rendu"},
 	{"documents", "Documents produits"},
 	{"fast", "Moteur rapide ⚡"},
+	{"native", "Moteur natif (Typst)"},
+	{"async", "Rendu asynchrone"},
 	{"storage", "Stockage des fichiers"},
 	{"history", "Historique"},
 	{"security", "Sécurité"},
@@ -74,7 +76,7 @@ var Defs = []Def{
 
 	{Key: "default_output", Group: "documents", Label: "Format par défaut", Kind: Choice, Default: "pdf", Options: []string{"pdf", "docx"}},
 	{Key: "default_pdfa", Group: "documents", Label: "PDF/A par défaut", Help: "Norme d'archivage appliquée quand la demande n'en précise pas.", Kind: Choice, Default: "none", Options: []string{"none", "PDF/A-1b", "PDF/A-2b", "PDF/A-3b"}, Active: true},
-	{Key: "default_accessible", Group: "documents", Label: "PDF accessibles par défaut", Help: "PDF balisés (PDF/UA) : lisibles par les lecteurs d'écran. Une demande peut le choisir elle-même.", Kind: Toggle, Default: "false", Active: true},
+	{Key: "default_accessible", Group: "documents", Label: "PDF accessibles par défaut", Help: "PDF balisés, conformes PDF/UA-1 (vérifiés avec veraPDF) : lisibles par les lecteurs d'écran. Une demande peut le choisir elle-même. Avec PDF/A, préférez PDF/A-2b ou 3b : PDF/A-1b reste balisé mais sans la marque PDF/UA.", Kind: Toggle, Default: "false", Active: true},
 	{Key: "watermark_text", Group: "documents", Label: "Filigrane", Help: "Texte ajouté sur chaque page des PDF quand la demande n'en précise pas, par exemple SPÉCIMEN hors production. Vide : aucun. Il ne se combine pas avec PDF/A ni avec les PDF accessibles : ceux-ci l'emportent.", Kind: Text, Max: 100, Active: true},
 	{Key: "watermark_color", Group: "documents", Label: "Couleur du filigrane", Help: "Au format #RRGGBB.", Kind: Text, Default: "#C0C0C0", Max: 7, Active: true},
 	{Key: "watermark_size", Group: "documents", Label: "Taille du filigrane (points)", Help: "0 : adaptée à la page.", Kind: Number, Default: "0", Min: 0, Max: 300, Active: true},
@@ -86,6 +88,15 @@ var Defs = []Def{
 
 	{Key: "fast_engine", Group: "fast", Label: "Utiliser le moteur rapide", Help: "Les modèles à mise en page fixe, qualifiés au pixel près, sont remplis par un calque posé sur leur fond déjà rendu ; les autres passent par LibreOffice.", Kind: Toggle, Default: "true", Active: true},
 	{Key: "fast_engine_pixel_threshold", Group: "fast", Label: "Écart pixel toléré (pour mille)", Help: "Un modèle est qualifié si ses rendus par le calque diffèrent de ceux de LibreOffice de moins de ce seuil.", Kind: Number, Default: "1", Min: 0, Max: 50, Active: true},
+
+	{Key: "native_engine", Group: "native", Label: "Utiliser le moteur natif", Help: "Un modèle qui a une copie Typst, écrite à la main pour sa version et identique au pixel près à LibreOffice, est produit sans LibreOffice, environ 30 fois plus vite. Une nouvelle version du modèle Word repasse par LibreOffice jusqu'à ce qu'une nouvelle copie soit jointe et vérifiée. Désactivé : LibreOffice produit tout.", Kind: Toggle, Default: "true", Active: true},
+	{Key: "native_engine_pixel_threshold", Group: "native", Label: "Écart pixel toléré (pour mille)", Help: "Une copie Typst sert si, pour chaque jeu de données comparé et chaque page, ses documents diffèrent de ceux de LibreOffice de moins de ce seuil.", Kind: Number, Default: "1", Min: 0, Max: 50, Active: true},
+	{Key: "native_workers", Group: "native", Label: "Processus Typst", Help: "Un processus produit plusieurs centaines de documents par seconde : 1 suffit le plus souvent.", Kind: Number, Default: "1", Min: 1, Max: 8, Active: true, Restart: true},
+
+	{Key: "async_workers", Group: "async", Label: "Documents produits en parallèle", Help: "Demandes de POST /v1/render/async traitées en même temps ; elles partagent les workers LibreOffice avec les autres demandes.", Kind: Number, Default: "2", Min: 1, Max: 16, Active: true, Restart: true},
+	{Key: "async_queue_size", Group: "async", Label: "Demandes en attente", Help: "Au-delà, DocIbis répond « occupé » (503). Les demandes attendent en mémoire : un redémarrage les interrompt.", Kind: Number, Default: "200", Min: 1, Max: 10000, Active: true},
+	{Key: "async_retention_minutes", Group: "async", Label: "Conservation des documents (minutes)", Help: "Un document produit en arrière-plan se lit par GET /v1/jobs/{id}/document pendant ce délai, puis il est effacé.", Kind: Number, Default: "60", Min: 1, Max: 1440, Active: true},
+	{Key: "async_url_allowlist", Group: "async", Label: "Domaines autorisés pour les rappels et les dépôts", Help: "Un domaine par ligne, sous-domaines compris (par exemple app.exemple.fr, mon-bucket.s3.eu-central-1.amazonaws.com). callbackUrl et uploadUrl ne visent que ces domaines, en HTTPS ; vide : ils sont refusés. Les rappels sont signés avec la variable d'environnement WEBHOOK_SECRET.", Kind: List, Max: 2000, Active: true},
 
 	{Key: "blob_store", Group: "storage", Label: "Emplacement des fichiers", Help: "db (dans la base), s3://bucket/préfixe, r2://bucket/préfixe.", Kind: Text, Default: "db", Max: 300, Env: "BLOB_STORE", Restart: true},
 	{Key: "blob_endpoint", Group: "storage", Label: "Point d'accès compatible S3", Help: "MinIO, Scaleway, OVHcloud… Vide pour AWS S3.", Kind: Text, Max: 300, Env: "BLOB_ENDPOINT", Restart: true},

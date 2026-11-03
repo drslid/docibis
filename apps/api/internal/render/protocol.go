@@ -7,6 +7,9 @@ type Request struct {
 	Out    string `json:"out"`
 	Format string `json:"format"`
 	Filter string `json:"filter,omitempty"`
+	// Inputs are the values a Typst source reads (sys.inputs), for the
+	// native worker.
+	Inputs map[string]string `json:"inputs,omitempty"`
 }
 
 // Reply answers a request; the first reply of a worker says it is ready.

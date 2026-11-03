@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -99,9 +100,25 @@ func (s *Server) compare(ctx context.Context, t store.Template, v store.Template
 	return len(got), len(want), permille, nil
 }
 
-// rasterize draws the pages of a PDF in grey with pdftoppm (poppler).
+// rasterize draws the pages of a PDF in grey with PDFium (pdftools.py).
 func rasterize(ctx context.Context, pdf []byte, dir, name string) ([]*image.Gray, error) {
 	return rasterizeAt(ctx, pdf, dir, name, checkDPI, checkMaxPages)
+}
+
+// pdfTools runs pdftools.py, which draws and reads PDFs with PDFium (the PDF
+// engine of Chrome): DOCIBIS_PDFTOOLS when set, otherwise the one of the
+// image, run by the Python bundled with LibreOffice.
+func pdfTools(ctx context.Context, args ...string) *exec.Cmd {
+	command := strings.Fields(os.Getenv("DOCIBIS_PDFTOOLS"))
+	if len(command) == 0 {
+		program := cmp.Or(os.Getenv("LO_PATH"), "/opt/libreoffice26.8/program")
+		command = []string{filepath.Join(program, "python"), "/usr/local/lib/docibis/pdftools.py"}
+	}
+	cmd := exec.CommandContext(ctx, command[0], append(command[1:], args...)...)
+	if os.Getenv("PYTHONPATH") == "" {
+		cmd.Env = append(os.Environ(), "PYTHONPATH=/usr/local/lib/docibis/python")
+	}
+	return cmd
 }
 
 func rasterizeAt(ctx context.Context, pdf []byte, dir, name string, dpi, most int) ([]*image.Gray, error) {
@@ -111,9 +128,9 @@ func rasterizeAt(ctx context.Context, pdf []byte, dir, name string, dpi, most in
 	}
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, "pdftoppm", "-r", strconv.Itoa(dpi), "-gray", "-png", "-l", strconv.Itoa(most), in, filepath.Join(dir, name))
+	cmd := pdfTools(ctx, "raster", strconv.Itoa(dpi), strconv.Itoa(most), in, filepath.Join(dir, name))
 	if out, err := cmd.CombinedOutput(); err != nil {
-		return nil, fmt.Errorf("pdftoppm: %w: %s", err, bytes.TrimSpace(out))
+		return nil, fmt.Errorf("pdftools: %w: %s", err, bytes.TrimSpace(out))
 	}
 	files, err := filepath.Glob(filepath.Join(dir, name+"-*.png"))
 	if err != nil {
@@ -277,6 +294,7 @@ func (s *Server) Maintain(ctx context.Context) {
 	s.recordRelease(ctx)
 	if version.Version != "dev" {
 		s.resetFast(ctx, st)
+		s.resetNative(ctx, st)
 	}
 	s.describeLater(ctx)
 	if version.Version == "dev" {

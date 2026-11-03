@@ -75,12 +75,15 @@ class Office:
     def __init__(self, program, profile):
         harden(profile)
         self.pipe = f"docibis{os.getpid()}"
+        # oosplash with the environment the soffice shell script sets: the
+        # image has no shell.
+        env = dict(os.environ, SAL_ENABLE_FILE_LOCKING="1", LO_SAVE_LC_ALL=os.environ.get("LC_ALL", ""))
         # In the worker's process group: the server stops the whole group.
         self.process = subprocess.Popen(
-            [os.path.join(program, "soffice"), "-env:UserInstallation=" + uno.systemPathToFileUrl(profile),
+            [os.path.join(program, "oosplash"), "-env:UserInstallation=" + uno.systemPathToFileUrl(profile),
              f"--accept=pipe,name={self.pipe};urp;", "--headless", "--invisible", "--nologo", "--nodefault",
              "--nofirststartwizard", "--norestore", "--nolockcheck"],
-            stdin=subprocess.DEVNULL, stdout=sys.stderr, stderr=sys.stderr)
+            stdin=subprocess.DEVNULL, stdout=sys.stderr, stderr=sys.stderr, env=env)
         local = uno.getComponentContext()
         resolver = local.ServiceManager.createInstanceWithContext("com.sun.star.bridge.UnoUrlResolver", local)
         deadline = time.monotonic() + START_TIMEOUT

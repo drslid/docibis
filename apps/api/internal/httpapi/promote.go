@@ -155,8 +155,8 @@ func (s *Server) ListPromotions(ctx context.Context, req ListPromotionsRequestOb
 	return out, nil
 }
 
-// versionZip packs a version as the import reads it: the template, and its
-// reference with its data.
+// versionZip packs a version as the import reads it: the template, its
+// reference with its data, and its Typst copy.
 func versionZip(t store.Template, v store.TemplateVersion) ([]byte, error) {
 	var buf bytes.Buffer
 	zw := zip.NewWriter(&buf)
@@ -175,6 +175,11 @@ func versionZip(t store.Template, v store.TemplateVersion) ([]byte, error) {
 			return nil, err
 		}
 		if err := add(t.Path+".data.json", []byte(v.ReferenceData)); err != nil {
+			return nil, err
+		}
+	}
+	if v.NativeSource != "" {
+		if err := add(t.Path+".native.typ", []byte(v.NativeSource)); err != nil {
 			return nil, err
 		}
 	}

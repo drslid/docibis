@@ -112,6 +112,7 @@ func TestPostgres(t *testing.T) {
 	checkAPIKeys(t, s)
 	checkHistory(t, s)
 	checkTemplates(t, s)
+	checkRenderJobs(t, s)
 }
 
 // fakeLease is one lock object shared by several fakeLeasers, like lock.json on S3.

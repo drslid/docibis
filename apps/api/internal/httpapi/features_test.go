@@ -11,7 +11,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -363,8 +362,8 @@ func TestCompareHelpers(t *testing.T) {
 }
 
 func TestCompareFixedPDFVersions(t *testing.T) {
-	if _, err := exec.LookPath("pdftoppm"); err != nil {
-		t.Skip("poppler not installed")
+	if _, err := os.Stat("/usr/local/lib/docibis/pdftools.py"); err != nil && os.Getenv("DOCIBIS_PDFTOOLS") == "" {
+		t.Skip("PDF tools not installed (DOCIBIS_PDFTOOLS)")
 	}
 	srv, setup := open(t, nil)
 	c := signIn(t, srv, setup)

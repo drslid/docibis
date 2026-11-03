@@ -100,6 +100,17 @@ func Start(ctx context.Context, opts Options) (*Pool, error) {
 // Convert converts in to out with a warm worker. It returns the time spent
 // by LibreOffice.
 func (p *Pool) Convert(ctx context.Context, in, out, format, filter string) (time.Duration, error) {
+	return p.do(ctx, Request{In: in, Out: out, Format: format, Filter: filter})
+}
+
+// Compile makes the PDF out of the Typst source in, with the values it
+// reads, on a worker of the native engine. It returns the time spent by
+// Typst.
+func (p *Pool) Compile(ctx context.Context, in, out string, inputs map[string]string) (time.Duration, error) {
+	return p.do(ctx, Request{In: in, Out: out, Format: "pdf", Inputs: inputs})
+}
+
+func (p *Pool) do(ctx context.Context, req Request) (time.Duration, error) {
 	select {
 	case p.slots <- struct{}{}:
 	default:
@@ -112,7 +123,7 @@ func (p *Pool) Convert(ctx context.Context, in, out, format, filter string) (tim
 		if err != nil {
 			return 0, err
 		}
-		d, err := p.convert(w, in, out, format, filter)
+		d, err := p.convert(w, req)
 		if errors.Is(err, errUnreachable) && attempt == 0 {
 			// It died before reading the document: another one does it.
 			continue
@@ -143,9 +154,10 @@ func (p *Pool) take(ctx context.Context) (*worker, error) {
 	}
 }
 
-func (p *Pool) convert(w *worker, in, out, format, filter string) (time.Duration, error) {
+func (p *Pool) convert(w *worker, req Request) (time.Duration, error) {
 	w.next++
-	reply, err := w.call(Request{ID: w.next, In: in, Out: out, Format: format, Filter: filter}, p.opts.Timeout)
+	req.ID = w.next
+	reply, err := w.call(req, p.opts.Timeout)
 	switch {
 	case err != nil:
 		// Hung or dead: replace it.

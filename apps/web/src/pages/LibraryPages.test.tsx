@@ -110,6 +110,23 @@ describe('TemplatePage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Revenir à celle-ci' }))
     await waitFor(() => expect(calls.some((c) => c.url === '/api/templates/7/publish' && c.method === 'POST' && c.body === '{"version":1}')).toBe(true))
   })
+
+  it('shows the Typst copy of the served version and lets an administrator replace it', async () => {
+    const native = { state: 'qualified' as const, sourceSha256: 'f00dcafe1234deadbeef', by: 'admin', attachedAt: '2026-11-03T09:00:00Z', at: '2026-11-03T09:01:00Z', permille: 0.01, tests: 9, nativeMs: 2.2, standardMs: 62 }
+    const withCopy: TemplateDetail = { ...detail, versions: [{ ...detail.versions[0], native }, detail.versions[1]] }
+    const calls = serve((url, method) => {
+      if (url === '/api/templates/7' && method === 'GET') return withCopy
+      if (url === '/api/templates/7/versions/2/native' && method === 'PUT') return { ...native, state: 'pending', sourceSha256: 'abc' }
+      return undefined
+    })
+    show(<TemplatePage />, '/modeles/7')
+    expect(await screen.findByText('Active : la copie Typst produit les PDF')).toBeInTheDocument()
+    expect(screen.getByText(/Un PDF en 2[,.]2 ms par Typst, 62 ms par LibreOffice/)).toBeInTheDocument()
+    expect(screen.getAllByRole('link', { name: /Télécharger/ }).some((a) => a.getAttribute('href') === '/api/templates/7/versions/2/native')).toBe(true)
+    const source = new File(['= Proposition'], 'tarif.typ', { type: 'text/plain' })
+    fireEvent.change(screen.getByLabelText('Joindre une copie Typst'), { target: { files: [source] } })
+    await waitFor(() => expect(calls.some((c) => c.url === '/api/templates/7/versions/2/native' && c.method === 'PUT' && c.body instanceof FormData)).toBe(true))
+  })
 })
 
 describe('ReleasesPage', () => {

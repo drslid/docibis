@@ -7,4 +7,5 @@
 !internal/
 !migrations/
 !worker/
+!docker/
 **/*_test.go

@@ -13,7 +13,6 @@ import (
 	"math"
 	"net/http"
 	"os"
-	"os/exec"
 	"path"
 	"path/filepath"
 	"strings"
@@ -206,8 +205,8 @@ func pngURL(img image.Image) *string {
 	return &u
 }
 
-// pdfText reads the lines of text of a PDF (pdftotext, poppler), without
-// the empty ones.
+// pdfText reads the lines of text of a PDF (PDFium, in reading order),
+// without the empty ones.
 func pdfText(ctx context.Context, pdf []byte, dir, name string) ([]string, error) {
 	in := filepath.Join(dir, name+"-text.pdf")
 	if err := os.WriteFile(in, pdf, 0o600); err != nil {
@@ -215,9 +214,9 @@ func pdfText(ctx context.Context, pdf []byte, dir, name string) ([]string, error
 	}
 	ctx, cancel := context.WithTimeout(ctx, time.Minute)
 	defer cancel()
-	raw, err := exec.CommandContext(ctx, "pdftotext", "-enc", "UTF-8", "-l", fmt.Sprint(checkMaxPages), in, "-").Output()
+	raw, err := pdfTools(ctx, "text", fmt.Sprint(checkMaxPages), in).Output()
 	if err != nil {
-		return nil, fmt.Errorf("pdftotext: %w", err)
+		return nil, fmt.Errorf("pdftools: %w", err)
 	}
 	var lines []string
 	for _, l := range strings.Split(string(raw), "\n") {

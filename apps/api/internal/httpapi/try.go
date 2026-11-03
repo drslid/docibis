@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"maps"
 	"mime/multipart"
 	"net/http"
 	"os"
@@ -56,7 +57,7 @@ func (s *Server) limitBody(next echo.HandlerFunc) echo.HandlerFunc {
 // bodyLimit is the most a request may send, in MB; 0 leaves the default.
 func bodyLimit(template, data int, method, p string) int {
 	switch {
-	case strings.HasPrefix(p, "/api/try/"), p == "/v1/render", p == "/v1/render/batch":
+	case strings.HasPrefix(p, "/api/try/"), p == "/v1/render", p == "/v1/render/async", p == "/v1/render/batch":
 		return template + data + 1
 	case p == mcpPath:
 		// The template travels in base64 inside JSON.
@@ -126,9 +127,15 @@ type tryForm struct {
 	// libID and libVersion name the version of the library used.
 	libID      int64
 	libVersion int
-	// libVersionID and fast tell its overlay for the fast engine.
+	// libVersionID and fast tell its overlay for the fast engine, native and
+	// nativeSHA its Typst copy for the native engine.
 	libVersionID int64
 	fast         string
+	native       string
+	nativeSHA    string
+	// callbackURL and uploadURL serve the documents produced in the
+	// background (/v1/render/async).
+	callbackURL, uploadURL string
 }
 
 // readForm reads the template file and the JSON data of a try form.
@@ -158,6 +165,11 @@ func (s *Server) readForm(body *multipart.Reader) (tryForm, error) {
 			var b []byte
 			b, err = io.ReadAll(io.LimitReader(part, 20))
 			f.format = strings.ToLower(strings.TrimSpace(string(b)))
+		case "callbackUrl", "uploadUrl":
+			var b []byte
+			if b, err = io.ReadAll(io.LimitReader(part, maxHookURL+1)); err == nil {
+				err = f.setHook(part.FormName(), string(b))
+			}
 		default:
 			var b []byte
 			if b, err = io.ReadAll(io.LimitReader(part, 400)); err == nil {
@@ -456,6 +468,7 @@ func (s *Server) resolve(ctx context.Context, f *tryForm) error {
 	f.name, f.template, f.check, f.prepared = path.Base(t.Path), v.Content, t.DataCheck, v.Prepared
 	f.libID, f.libVersion = t.ID, v.Number
 	f.libVersionID, f.fast = v.ID, v.Fast
+	f.native, f.nativeSHA = v.Native, v.NativeSHA256
 	if v.Fields != "" {
 		_ = json.Unmarshal([]byte(v.Fields), &f.fields)
 	}
@@ -554,7 +567,8 @@ type document struct {
 	libID      int64
 	libVersion int
 	opts       renderOptions
-	// engine is "overlay" when the fast engine drew it, else "standard".
+	// engine is "overlay" when the fast engine drew it, "native" when the
+	// Typst copy of the template made it, else "standard".
 	engine string
 }
 
@@ -638,12 +652,12 @@ func (s *Server) produceDocument(ctx context.Context, f tryForm, format string) 
 	}
 	s.logger.Debug("document: template ready", "request_id", requestID(ctx), "template", doc.name, "template_bytes", len(f.template),
 		"odt_bytes", len(odt), "prepare_ms", ms(prep), "data_bytes", len(f.data), "missing", len(doc.missing))
-	if s.renderFast(ctx, f, &doc) {
+	if s.renderFast(ctx, f, &doc) || s.renderNative(ctx, f, &doc, dir) {
 		doc.prepare = prep
 		return doc, nil
 	}
 	t := time.Now()
-	merged, err := merge.Fill(odt, f.data, merge.Options{Now: time.Now(), Fetch: s.imageFetcher(ctx), Meta: f.opts.meta, Dev: f.opts.devMode})
+	merged, err := merge.Fill(odt, f.data, merge.Options{Now: time.Now(), Fetch: s.imageFetcher(ctx), Meta: accessibleMeta(f.opts, odt, doc), Dev: f.opts.devMode})
 	if err != nil {
 		return doc, refuse("Fusion impossible : %v", err)
 	}
@@ -660,8 +674,30 @@ func (s *Server) produceDocument(ctx context.Context, f tryForm, format string) 
 	}
 	doc.render = time.Since(t)
 	s.logger.Debug("document: converted", "request_id", requestID(ctx), "template", doc.name, "format", doc.format, "options", f.opts.describe(), "render_ms", ms(doc.render))
-	doc.content, err = os.ReadFile(out)
-	return doc, err
+	if doc.content, err = os.ReadFile(out); err != nil || doc.format != "pdf" || !f.opts.accessible {
+		return doc, err
+	}
+	if fixed, err := unmapStandardTypes(ctx, doc.content); err != nil {
+		s.logger.Warn("accessible PDF: tags not checked", "request_id", requestID(ctx), "template", doc.name, "error", err)
+	} else {
+		doc.content = fixed
+	}
+	return doc, nil
+}
+
+// accessibleMeta gives an accessible PDF the title it needs: the one asked,
+// that of the template, or else the name of the document.
+func accessibleMeta(o renderOptions, odt []byte, doc document) map[string]string {
+	if !o.accessible || doc.format != "pdf" || o.meta["title"] != "" || merge.Title(odt) != "" {
+		return o.meta
+	}
+	meta := maps.Clone(o.meta)
+	if meta == nil {
+		meta = map[string]string{}
+	}
+	name := doc.fileName()
+	meta["title"] = strings.TrimSuffix(name, filepath.Ext(name))
+	return meta
 }
 
 // checkData compares the data with the fields the template reads: "strict"

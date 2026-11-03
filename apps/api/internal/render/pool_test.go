@@ -38,6 +38,9 @@ func fakeWorker() {
 		}
 		data, err := os.ReadFile(req.In)
 		r := Reply{ID: req.ID, Ms: 2}
+		if err == nil && req.Inputs != nil {
+			data = append(data, " "+req.Inputs["data"]...)
+		}
 		if err == nil {
 			err = os.WriteFile(req.Out, []byte(strings.ToUpper(string(data))), 0o600)
 		}
@@ -107,6 +110,22 @@ func TestHungAndCrashedWorkersAreReplaced(t *testing.T) {
 		if err := convert(t, p, "after-"+name); err != nil {
 			t.Fatalf("the replacement worker must convert: %v", err)
 		}
+	}
+}
+
+// The native worker gets the values the Typst source reads.
+func TestCompileSendsInputs(t *testing.T) {
+	p := start(t, Options{Workers: 1, QueueSize: 1, Timeout: 5 * time.Second})
+	dir := t.TempDir()
+	in, out := filepath.Join(dir, "main.typ"), filepath.Join(dir, "out.pdf")
+	if err := os.WriteFile(in, []byte("copy"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := p.Compile(context.Background(), in, out, map[string]string{"data": `{"nom":"x"}`}); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := os.ReadFile(out); err != nil || string(got) != `COPY {"NOM":"X"}` {
+		t.Fatalf("output %q %v", got, err)
 	}
 }
 

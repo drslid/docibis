@@ -205,7 +205,7 @@ func serve() int {
 // works meanwhile, and the try routes answer "starting". The returned
 // function waits for the start, then stops the workers.
 func startWorkers(ctx context.Context, cfg *settings.Service, api *httpapi.Server, logger *slog.Logger) func() {
-	started := make(chan *render.Pool, 1)
+	started := make(chan []*render.Pool, 1)
 	workers := cfg.Int("render_workers")
 	if workers <= 0 {
 		cpus := httpapi.TaskCPUs(ctx)
@@ -232,11 +232,35 @@ func startWorkers(ctx context.Context, cfg *settings.Service, api *httpapi.Serve
 		}
 		api.SetRenderer(pool)
 		logger.Info("LibreOffice workers ready", "workers", workers)
+		pools := []*render.Pool{pool}
+		nativeWorkers := max(cfg.Int("native_workers"), 1)
+		var nativeEnv []string
+		if os.Getenv("PYTHONPATH") == "" {
+			nativeEnv = []string{"PYTHONPATH=/usr/local/lib/docibis/python"}
+		}
+		native, err := render.Start(ctx, render.Options{
+			Command:      nativeCommand(),
+			Env:          nativeEnv,
+			Workers:      nativeWorkers,
+			QueueSize:    cfg.Int("render_queue_size"),
+			Timeout:      time.Duration(cfg.Int("render_timeout_seconds")) * time.Second,
+			StartTimeout: 30 * time.Second,
+			Logger:       logger.With("engine", "typst"),
+		})
+		if err != nil {
+			logger.Warn("native engine not started: LibreOffice produces every document", "error", err)
+		} else {
+			api.SetNative(native)
+			pools = append(pools, native)
+			logger.Info("native engine ready", "workers", nativeWorkers)
+		}
 		go api.Maintain(ctx)
-		started <- pool
+		api.StartAsync(ctx, cfg.Int("async_workers"))
+		started <- pools
 	}()
 	return func() {
-		if pool := <-started; pool != nil {
+		api.StopAsync()
+		for _, pool := range <-started {
 			pool.Close()
 		}
 	}

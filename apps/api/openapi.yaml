@@ -77,6 +77,107 @@ paths:
           $ref: "#/components/responses/TooManyRequests"
         "503":
           $ref: "#/components/responses/Busy"
+  /v1/render/async:
+    post:
+      operationId: renderDocumentAsync
+      tags: [documents]
+      summary: Produit un document en arrière-plan
+      description: |
+        Mêmes champs que /v1/render ; la réponse arrive tout de suite (202) avec le numéro du
+        travail. Le document se lit ensuite par GET /v1/jobs/{id}/document, pendant le délai du
+        réglage « Conservation des documents ». callbackUrl reçoit un POST JSON à la fin
+        (signé par X-DocIbis-Signature) ; uploadUrl reçoit le document par PUT (adresse S3
+        présignée, par exemple). Ces deux adresses visent un domaine autorisé dans la
+        configuration, en HTTPS.
+
+            curl -H "Authorization: Bearer $DOCIBIS_API_KEY" \
+              -F templateName=acme/contracts/broker/monthly/fiche_conseil.docx \
+              -F data=@donnees.json -F callbackUrl=https://app.exemple.fr/docibis \
+              https://<instance>/v1/render/async
+      security:
+        - apiKey: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: "#/components/schemas/RenderAsyncForm"
+      responses:
+        "202":
+          description: Demande acceptée, en attente
+          headers:
+            Location:
+              description: Adresse de l'état du travail
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RenderJob"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "413":
+          $ref: "#/components/responses/TooLarge"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "503":
+          $ref: "#/components/responses/Busy"
+  /v1/jobs/{id}:
+    parameters:
+      - {name: id, in: path, required: true, schema: {type: string}}
+    get:
+      operationId: getRenderJob
+      tags: [documents]
+      summary: État d'un document produit en arrière-plan
+      security:
+        - apiKey: []
+      responses:
+        "200":
+          description: L'état du travail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RenderJob"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /v1/jobs/{id}/document:
+    parameters:
+      - {name: id, in: path, required: true, schema: {type: string}}
+    get:
+      operationId: getRenderJobDocument
+      tags: [documents]
+      summary: Document produit en arrière-plan
+      description: Répond 409 tant que le document n'est pas prêt, 404 une fois le délai de conservation passé.
+      security:
+        - apiKey: []
+      responses:
+        "200":
+          description: Le document produit
+          headers:
+            Content-Disposition:
+              schema:
+                type: string
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+            application/vnd.openxmlformats-officedocument.wordprocessingml.document:
+              schema:
+                type: string
+                format: binary
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
   /v1/render/batch:
     post:
       operationId: renderBatch
@@ -1305,6 +1406,92 @@ paths:
           $ref: "#/components/responses/NotFound"
         "503":
           $ref: "#/components/responses/Busy"
+  /api/templates/{id}/versions/{number}/native:
+    parameters:
+      - {name: id, in: path, required: true, schema: {type: integer, format: int64}}
+      - {name: number, in: path, required: true, schema: {type: integer}}
+    get:
+      operationId: getTemplateNative
+      tags: [console]
+      summary: Copie Typst de la version (éditeurs)
+      responses:
+        "200":
+          description: La source Typst
+          content:
+            text/plain:
+              schema:
+                type: string
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    put:
+      operationId: setTemplateNative
+      tags: [console]
+      summary: Joint une copie Typst écrite à la main pour cette version, puis la compare à LibreOffice (administrateurs)
+      description: >-
+        La copie produit les PDF à la place de LibreOffice seulement si elle donne le même document
+        au pixel près pour les données d'exemple, de référence et leurs variantes. Une nouvelle
+        version du modèle Word n'a pas de copie : LibreOffice la produit.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: "#/components/schemas/NativeUpload"
+      responses:
+        "200":
+          description: Résultat de la comparaison
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NativeStatus"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "413":
+          $ref: "#/components/responses/TooLarge"
+        "503":
+          $ref: "#/components/responses/Busy"
+    post:
+      operationId: checkTemplateNative
+      tags: [console]
+      summary: Compare à nouveau la copie Typst de la version à LibreOffice (éditeurs)
+      responses:
+        "200":
+          description: Résultat de la comparaison
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NativeStatus"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "503":
+          $ref: "#/components/responses/Busy"
+    delete:
+      operationId: deleteTemplateNative
+      tags: [console]
+      summary: Retire la copie Typst de la version, LibreOffice la produit de nouveau (administrateurs)
+      responses:
+        "204":
+          description: Copie retirée
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
   /api/audit/export:
     get:
       operationId: exportAudit
@@ -2097,6 +2284,12 @@ components:
         application/problem+json:
           schema:
             $ref: "#/components/schemas/Problem"
+    Conflict:
+      description: Pas encore possible ; réessayer plus tard
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
     Busy:
       description: Moteur de rendu pas encore prêt, ou tous les workers occupés ; réessayer plus tard
       headers:
@@ -2703,7 +2896,7 @@ components:
           type: string
           enum: [none, PDF/A-1b, PDF/A-2b, PDF/A-3b]
         accessible:
-          description: PDF balisé et conforme PDF/UA, lisible par les lecteurs d'écran
+          description: PDF balisé et conforme PDF/UA-1, lisible par les lecteurs d'écran ; sans titre (title) ni titre dans le modèle, le nom du document sert de titre. Avec PDF/A, choisir PDF/A-2b ou 3b (PDF/A-1b reste balisé mais sans la marque PDF/UA)
           type: boolean
         watermark:
           description: Texte du filigrane ; « none » pour aucun ; défaut du réglage « Filigrane »
@@ -2769,6 +2962,63 @@ components:
         devMode:
           description: Mode développeur (nom Docmosis) ; les données absentes et les expressions illisibles sont écrites en surbrillance dans le document
           type: boolean
+    RenderAsyncForm:
+      allOf:
+        - $ref: "#/components/schemas/RenderForm"
+        - type: object
+          properties:
+            callbackUrl:
+              description: Adresse HTTPS qui reçoit un POST JSON (RenderJob) quand le document est prêt ou en échec ; domaine autorisé dans la configuration
+              type: string
+              maxLength: 4000
+            uploadUrl:
+              description: Adresse HTTPS où DocIbis dépose le document par PUT (adresse S3 présignée, par exemple) ; domaine autorisé dans la configuration
+              type: string
+              maxLength: 4000
+    RenderJob:
+      description: Un document produit en arrière-plan
+      type: object
+      required: [id, status, createdAt, expiresAt, template, format]
+      properties:
+        id:
+          type: string
+          example: job_k7qm2xv9ab3d4e5f
+        status:
+          description: queued (en attente), running (en cours), done (prêt), failed (en échec)
+          type: string
+          enum: [queued, running, done, failed]
+        createdAt:
+          type: string
+          format: date-time
+        finishedAt:
+          type: string
+          format: date-time
+        expiresAt:
+          description: Après cette date, le travail et son document sont effacés
+          type: string
+          format: date-time
+        template:
+          type: string
+        format:
+          type: string
+          enum: [pdf, docx]
+        size:
+          description: Taille du document, en octets
+          type: integer
+          format: int64
+        error:
+          type: string
+        documentUrl:
+          description: Adresse du document (GET, même clé), quand il est prêt
+          type: string
+        upload:
+          description: Dépôt vers uploadUrl
+          type: string
+          enum: [pending, done, failed]
+        callback:
+          description: Rappel vers callbackUrl
+          type: string
+          enum: [pending, done, failed]
     RenderOptions:
       type: object
       properties:
@@ -2947,6 +3197,8 @@ components:
           $ref: "#/components/schemas/Scheduled"
         fast:
           $ref: "#/components/schemas/FastStatus"
+        native:
+          $ref: "#/components/schemas/NativeStatus"
         createdAt:
           type: string
           format: date-time
@@ -2986,6 +3238,59 @@ components:
         at:
           type: string
           format: date-time
+    NativeStatus:
+      description: >-
+        Moteur natif d'une version : une copie Typst du modèle, écrite à la main pour cette version,
+        produit le PDF sans LibreOffice tant qu'elle donne le même document au pixel près.
+      type: object
+      required: [state, sourceSha256]
+      properties:
+        state:
+          description: >-
+            pending (copie jointe, comparaison à faire), qualified (la copie sert les PDF),
+            refused (écart avec LibreOffice : LibreOffice sert), error (la comparaison a échoué)
+          type: string
+          enum: [pending, qualified, refused, error]
+        reason:
+          description: Pourquoi la copie n'est pas utilisée
+          type: string
+        permille:
+          description: Plus grand écart de pixels mesuré avec LibreOffice, en pour mille
+          type: number
+        tests:
+          description: Nombre de jeux de données comparés
+          type: integer
+        nativeMs:
+          description: Durée d'un rendu par la copie Typst, en millisecondes
+          type: number
+        standardMs:
+          description: Durée du même rendu par LibreOffice, en millisecondes
+          type: integer
+        at:
+          description: Date de la dernière comparaison
+          type: string
+          format: date-time
+        sourceSha256:
+          description: Empreinte de la copie Typst
+          type: string
+        sourceBytes:
+          description: Taille de la copie Typst, en octets
+          type: integer
+        by:
+          description: Qui a joint la copie
+          type: string
+        attachedAt:
+          description: Quand la copie a été jointe
+          type: string
+          format: date-time
+    NativeUpload:
+      type: object
+      required: [source]
+      properties:
+        source:
+          description: Copie Typst du modèle (.typ), qui lit sys.inputs.data (les données JSON), sys.inputs.today (AAAA-MM-JJ, UTC) et sys.inputs.now
+          type: string
+          format: binary
     LibraryVersion:
       type: object
       required: [number, size, sha256, engine, note, createdAt, createdBy, hasReference]
@@ -3017,6 +3322,8 @@ components:
             $ref: "#/components/schemas/LintIssue"
         fast:
           $ref: "#/components/schemas/FastStatus"
+        native:
+          $ref: "#/components/schemas/NativeStatus"
     TemplateField:
       type: object
       required: [path, kind, optional]
@@ -3137,6 +3444,9 @@ components:
         unchanged:
           type: integer
         references:
+          type: integer
+        natives:
+          description: Copies Typst jointes (X.docx.native.typ)
           type: integer
         errors:
           type: array
@@ -3425,9 +3735,9 @@ components:
           description: Taille du PDF, en octets
           type: integer
         engine:
-          description: Moteur utilisé, standard (LibreOffice) ou overlay (moteur rapide, calque posé sur un fond déjà rendu)
+          description: Moteur utilisé, standard (LibreOffice), overlay (moteur rapide, calque posé sur un fond déjà rendu) ou native (copie Typst du modèle)
           type: string
-          enum: [standard, overlay]
+          enum: [standard, overlay, native]
         prepareMs:
           description: Préparation par LibreOffice (Word vers ODT) ; 0 si déjà faite
           type: integer

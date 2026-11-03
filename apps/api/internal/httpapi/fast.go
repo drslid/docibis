@@ -287,7 +287,7 @@ func (s *Server) qualify(ctx context.Context, t store.Template, v store.Template
 		}
 		// The pixels forgive a shift of 2 pixels: a tick in the wrong box
 		// or a value in the wrong cell would pass; the text would not.
-		if where, differ := textDiffers(doc.content, drawn); differ {
+		if where, differ := textDiffers(doc.content, drawn, "calque"); differ {
 			return because(FastStatusStateRefused, "Le texte du calque diffère de celui de LibreOffice (%s).", where)
 		}
 		tests++
@@ -381,8 +381,8 @@ func replaceSample(v any, text string) (any, bool) {
 }
 
 // textDiffers compares what two PDFs read, line by line; where tells the
-// first difference.
-func textDiffers(a, b []byte) (where string, differ bool) {
+// first difference, b being what the engine named other drew.
+func textDiffers(a, b []byte, other string) (where string, differ bool) {
 	ta, errA := fast.Text(a)
 	tb, errB := fast.Text(b)
 	if errA != nil || errB != nil {
@@ -399,7 +399,7 @@ func textDiffers(a, b []byte) (where string, differ bool) {
 	around := func(t []rune) string {
 		return strings.NewReplacer("\n", " ", "\f", " ").Replace(string(t[max(0, i-15):min(len(t), i+15)]))
 	}
-	return fmt.Sprintf("LibreOffice « %s », calque « %s »", around(ra), around(rb)), true
+	return fmt.Sprintf("LibreOffice « %s », %s « %s »", around(ra), other, around(rb)), true
 }
 
 var plainTag = regexp.MustCompile(`^[\pL_][\pL\pN_]*(\.[\pL_][\pL\pN_]*)*$`)

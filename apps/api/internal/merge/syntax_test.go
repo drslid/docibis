@@ -1,6 +1,8 @@
 package merge
 
 import (
+	"archive/zip"
+	"bytes"
 	"strings"
 	"testing"
 )
@@ -43,6 +45,25 @@ func TestDocumentMetadata(t *testing.T) {
 	}
 	if strings.Contains(got, "Modèle") {
 		t.Error("old title kept:", got)
+	}
+
+	odt := func(meta string) []byte {
+		var b bytes.Buffer
+		z := zip.NewWriter(&b)
+		if meta != "" {
+			w, _ := z.Create("meta.xml")
+			_, _ = w.Write([]byte(meta))
+		}
+		_ = z.Close()
+		return b.Bytes()
+	}
+	if title := Title(odt(string(out))); title != "Contrat & avenant" {
+		t.Errorf("title %q", title)
+	}
+	for _, meta := range []string{"", `<?xml version="1.0"?><office:document-meta xmlns:office="o" xmlns:dc="d"><office:meta><dc:title> </dc:title></office:meta></office:document-meta>`} {
+		if title := Title(odt(meta)); title != "" {
+			t.Errorf("no title: %q", title)
+		}
 	}
 }
 

@@ -39,6 +39,9 @@ type Server struct {
 	images   imageCache
 	system   systemSampler
 	overlays overlayCache
+	// native runs the Typst copies (nil until its workers are warm).
+	native      atomic.Pointer[nativeBox]
+	nativeFiles nativeFiles
 	// Background work of the library: reading imported templates, comparing
 	// with the references.
 	describing, describeQueued, checking atomic.Bool
@@ -46,6 +49,12 @@ type Server struct {
 	releaseNoted atomic.Bool
 	// key seals the second-factor secrets (APP_SECRET_KEY), nil without it.
 	key []byte
+	// async holds the documents produced in the background; hooks calls
+	// back and uploads them, the callbacks signed with hookKey
+	// (WEBHOOK_SECRET), nil without it.
+	async   asyncQueue
+	hooks   *http.Client
+	hookKey []byte
 }
 
 var _ StrictServerInterface = (*Server)(nil)
@@ -53,10 +62,15 @@ var _ StrictServerInterface = (*Server)(nil)
 // NewServer prepares the handlers; startup lists the read-only settings
 // shown by the configuration page.
 func NewServer(startup []StartupSetting, logger *slog.Logger) *Server {
-	s := &Server{startup: startup, logger: logger, started: time.Now(), key: appKey()}
+	s := &Server{startup: startup, logger: logger, started: time.Now(), key: appKey(), hooks: newHookClient(), hookKey: webhookKey()}
+	s.async.jobs = make(chan *asyncJob, maxAsyncQueue)
+	s.async.held = map[string]bool{}
 	s.metrics = newMetrics(s)
 	if t := os.Getenv("METRICS_TOKEN"); t != "" && envMetricsToken() == "" {
 		logger.Warn("METRICS_TOKEN ignored: it must have at least 32 characters")
+	}
+	if k := os.Getenv("WEBHOOK_SECRET"); k != "" && s.hookKey == nil {
+		logger.Warn("WEBHOOK_SECRET ignored: it must have at least 32 characters")
 	}
 	if k := os.Getenv("APP_SECRET_KEY"); k != "" && s.key == nil {
 		logger.Warn("APP_SECRET_KEY ignored: it must have at least 32 characters")

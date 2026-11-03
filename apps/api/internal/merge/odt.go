@@ -240,3 +240,39 @@ func read(f *zip.File) ([]byte, error) {
 	defer rc.Close()
 	return io.ReadAll(rc)
 }
+
+// Title is the title of an OpenDocument file (dc:title of meta.xml), "" when
+// it has none.
+func Title(odt []byte) string {
+	zr, err := zip.NewReader(bytes.NewReader(odt), int64(len(odt)))
+	if err != nil {
+		return ""
+	}
+	for _, f := range zr.File {
+		if f.Name != "meta.xml" {
+			continue
+		}
+		raw, err := read(f)
+		if err != nil {
+			return ""
+		}
+		tree, err := parse(raw)
+		if err != nil {
+			return ""
+		}
+		var title strings.Builder
+		tree.walk(func(n *node) bool {
+			if n.name != "dc:title" {
+				return true
+			}
+			for _, c := range n.children {
+				if c.kind == textNode {
+					title.WriteString(c.text)
+				}
+			}
+			return false
+		})
+		return strings.TrimSpace(title.String())
+	}
+	return ""
+}

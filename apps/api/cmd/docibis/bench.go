@@ -33,6 +33,18 @@ func workerCommand() []string {
 	return []string{filepath.Join(program, "python"), "/usr/local/lib/docibis/worker.py"}
 }
 
+// nativeCommand runs native.py, the Typst worker, with the same Python.
+func nativeCommand() []string {
+	if command := strings.Fields(os.Getenv("DOCIBIS_NATIVE_WORKER")); len(command) > 0 {
+		return command
+	}
+	program := os.Getenv("LO_PATH")
+	if program == "" {
+		program = "/opt/libreoffice26.8/program"
+	}
+	return []string{filepath.Join(program, "python"), "/usr/local/lib/docibis/native.py"}
+}
+
 // bench converts files with warm workers and prints the times.
 //
 //	docibis bench [-workers 1] [-runs 10] [-format pdf] [-odt] [-parallel 3] files...

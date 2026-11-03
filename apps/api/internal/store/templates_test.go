@@ -17,6 +17,54 @@ func TestTemplatesSQLite(t *testing.T) {
 	checkTemplates(t, s)
 }
 
+// checkNativeCopy attaches a Typst copy to the published version (read
+// before), checks it, then resets and removes it.
+func checkNativeCopy(t *testing.T, s *Store, templateID int64) {
+	t.Helper()
+	ctx := context.Background()
+	v, _, err := s.TemplateVersion(ctx, templateID, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Only versions read can be compared.
+	if err := s.DescribeVersion(ctx, v.ID, `[]`, `{}`, "native", `[]`, []byte("odt2")); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetNativeSource(ctx, v.ID, "= Copie", "abc", "admin"); err != nil {
+		t.Fatal(err)
+	}
+	if src, err := s.NativeSource(ctx, v.ID); err != nil || src != "= Copie" {
+		t.Fatalf("source: %q %v", src, err)
+	}
+	if served, _, err := s.ServedVersion(ctx, templateID, 2); err != nil || served.NativeSource != "" || served.NativeSHA256 != "abc" {
+		t.Fatalf("served version: %+v %v", served, err)
+	}
+	if pending, err := s.UncheckedNativeVersions(ctx); err != nil || len(pending) != 1 || pending[0].Number != 2 {
+		t.Fatalf("unchecked: %+v %v", pending, err)
+	}
+	if err := s.SetNative(ctx, v.ID, `{"state":"qualified"}`); err != nil {
+		t.Fatal(err)
+	}
+	if got, _, _ := s.TemplateByID(ctx, templateID); got.Native != `{"state":"qualified"}` || got.NativeSHA256 != "abc" {
+		t.Fatalf("published copy: %+v", got)
+	}
+	if pending, _ := s.UncheckedNativeVersions(ctx); len(pending) != 0 {
+		t.Fatalf("checked copy still pending: %+v", pending)
+	}
+	if err := s.ResetNative(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if pending, _ := s.UncheckedNativeVersions(ctx); len(pending) != 1 {
+		t.Fatalf("after reset: %+v", pending)
+	}
+	if err := s.SetNativeSource(ctx, v.ID, "", "abc", "admin"); err != nil {
+		t.Fatal(err)
+	}
+	if got, _, _ := s.TemplateVersion(ctx, templateID, 2); got.NativeSource != "" || got.NativeSHA256 != "" || got.NativeAt != nil {
+		t.Fatalf("after removal: %+v", got)
+	}
+}
+
 // checkTemplates runs on every database engine: the library, its versions,
 // references and release notes.
 func checkTemplates(t *testing.T, s *Store) {
@@ -113,6 +161,7 @@ func checkTemplates(t *testing.T, s *Store) {
 		t.Fatalf("publishing the planned version by hand ends the plan: %+v", got)
 	}
 	checkUses(t, s, tpl.ID)
+	checkNativeCopy(t, s, tpl.ID)
 	got.Description, got.DataCheck = "Fiche conseil", "strict"
 	if err := s.UpdateTemplate(ctx, &got); err != nil {
 		t.Fatal(err)

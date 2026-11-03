@@ -52,8 +52,9 @@ func withRequestID(next echo.HandlerFunc) echo.HandlerFunc {
 }
 
 // securityHeaders marks every answer of the API: nothing sniffed, framed or
-// kept in a cache (documents and personal data), no address passed on. A
-// handler may still allow caching, as the logo does.
+// kept in a cache (documents and personal data), no address passed on, HTTPS
+// only once seen over HTTPS. A handler may still allow caching, as the logo
+// does.
 func securityHeaders(next echo.HandlerFunc) echo.HandlerFunc {
 	return func(c *echo.Context) error {
 		h := c.Response().Header()
@@ -61,6 +62,7 @@ func securityHeaders(next echo.HandlerFunc) echo.HandlerFunc {
 		h.Set("X-Frame-Options", "DENY")
 		h.Set("Referrer-Policy", "no-referrer")
 		h.Set("Cache-Control", "no-store")
+		h.Set("Strict-Transport-Security", "max-age=31536000")
 		return next(c)
 	}
 }

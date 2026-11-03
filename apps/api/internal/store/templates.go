@@ -36,6 +36,10 @@ type Template struct {
 	Lint string `bun:"lint,scanonly"`
 	// Fast engine of the published version.
 	Fast string `bun:"fast,scanonly"`
+	// Native engine of the published version: its check, and the hash of
+	// its Typst copy ('' without one).
+	Native       string `bun:"native,scanonly"`
+	NativeSHA256 string `bun:"native_sha256,scanonly"`
 }
 
 // TemplateVersion is one upload of a template. Versions are never changed:
@@ -61,11 +65,19 @@ type TemplateVersion struct {
 	Prepared []byte `bun:"prepared,nullzero"`
 	// Fast is the qualification of the fast engine as JSON ('' until done)
 	// and FastOverlay what it draws with, when qualified.
-	Fast         string    `bun:"fast,notnull"`
-	FastOverlay  []byte    `bun:"fast_overlay,nullzero"`
-	CreatedAt    time.Time `bun:"created_at,notnull"`
-	CreatedBy    string    `bun:"created_by,notnull"`
-	HasReference bool      `bun:"has_reference,scanonly"`
+	Fast        string `bun:"fast,notnull"`
+	FastOverlay []byte `bun:"fast_overlay,nullzero"`
+	// NativeSource is the Typst copy of the template, written by hand for
+	// this version, and Native its check against LibreOffice as JSON ('' until
+	// done).
+	NativeSource string     `bun:"native_source,notnull"`
+	NativeSHA256 string     `bun:"native_sha256,notnull"`
+	NativeBy     string     `bun:"native_by,notnull"`
+	NativeAt     *time.Time `bun:"native_at"`
+	Native       string     `bun:"native,notnull"`
+	CreatedAt    time.Time  `bun:"created_at,notnull"`
+	CreatedBy    string     `bun:"created_by,notnull"`
+	HasReference bool       `bun:"has_reference,scanonly"`
 }
 
 func (s *Store) templates() *bun.SelectQuery {
@@ -75,6 +87,8 @@ func (s *Store) templates() *bun.SelectQuery {
 		ColumnExpr("COALESCE(p.check_result, '') AS check_result").
 		ColumnExpr("p.reference IS NOT NULL AS has_reference").
 		ColumnExpr("COALESCE(p.fast, '') AS fast").
+		ColumnExpr("COALESCE(p.native, '') AS native").
+		ColumnExpr("COALESCE(p.native_sha256, '') AS native_sha256").
 		ColumnExpr("COALESCE((SELECT l.lint FROM template_versions AS l WHERE l.template_id = t.id ORDER BY l.number DESC LIMIT 1), '') AS lint").
 		Join("LEFT JOIN template_versions AS p ON p.template_id = t.id AND p.number = t.published")
 }
@@ -114,7 +128,7 @@ func (s *Store) TemplateByPath(ctx context.Context, path string) (Template, bool
 // without their files.
 func (s *Store) TemplateVersions(ctx context.Context, templateID int64) ([]TemplateVersion, error) {
 	rows := []TemplateVersion{}
-	err := s.DB.NewSelect().Model(&rows).ExcludeColumn("content", "reference", "prepared", "fast_overlay").
+	err := s.DB.NewSelect().Model(&rows).ExcludeColumn("content", "reference", "prepared", "fast_overlay", "native_source").
 		ColumnExpr("reference IS NOT NULL AS has_reference").
 		Where("template_id = ?", templateID).Order("number DESC").Scan(ctx)
 	return rows, err
@@ -133,7 +147,7 @@ func (s *Store) TemplateVersion(ctx context.Context, templateID int64, number in
 // ServedVersion reads what producing a document needs: the template, its
 // OpenDocument conversion and what it reads, not the reference.
 func (s *Store) ServedVersion(ctx context.Context, templateID int64, number int) (v TemplateVersion, ok bool, err error) {
-	err = s.DB.NewSelect().Model(&v).ExcludeColumn("reference", "reference_data", "check_result", "fast_overlay").
+	err = s.DB.NewSelect().Model(&v).ExcludeColumn("reference", "reference_data", "check_result", "fast_overlay", "native_source").
 		Where("template_id = ?", templateID).Where("number = ?", number).Scan(ctx)
 	if errors.Is(err, sql.ErrNoRows) {
 		return v, false, nil
@@ -257,10 +271,10 @@ func (s *Store) DeleteTemplate(ctx context.Context, id int64) error {
 
 // SetReference attaches the reference PDF of a version (Docmosis' rendering)
 // and the data it was made with; the last check no longer applies, and the
-// fast engine is qualified again with these data.
+// fast and native engines are checked again with these data.
 func (s *Store) SetReference(ctx context.Context, versionID int64, pdf []byte, data string) error {
 	if _, err := s.DB.NewUpdate().Model((*TemplateVersion)(nil)).Set("reference = ?", pdf).Set("reference_data = ?", data).
-		Set("check_result = ''").Set("fast = ''").Set("fast_overlay = NULL").Where("id = ?", versionID).Exec(ctx); err != nil {
+		Set("check_result = ''").Set("fast = ''").Set("fast_overlay = NULL").Set("native = ''").Where("id = ?", versionID).Exec(ctx); err != nil {
 		return err
 	}
 	return s.Sync(ctx)
@@ -299,7 +313,7 @@ func (s *Store) UndescribedVersions(ctx context.Context) ([]TemplateVersion, err
 // its checks and its conversion to OpenDocument.
 func (s *Store) DescribeVersion(ctx context.Context, id int64, fields, sample, engine, lint string, prepared []byte) error {
 	q := s.DB.NewUpdate().Model((*TemplateVersion)(nil)).Set("fields = ?", fields).Set("sample = ?", sample).
-		Set("engine = ?", engine).Set("lint = ?", lint).Set("fast = ''").Set("fast_overlay = NULL").Where("id = ?", id)
+		Set("engine = ?", engine).Set("lint = ?", lint).Set("fast = ''").Set("fast_overlay = NULL").Set("native = ''").Where("id = ?", id)
 	if len(prepared) > 0 {
 		q = q.Set("prepared = ?", prepared)
 	}
@@ -336,5 +350,53 @@ func (s *Store) FastOverlay(ctx context.Context, versionID int64) ([]byte, error
 func (s *Store) ResetFast(ctx context.Context) error {
 	_, err := s.DB.NewUpdate().Model((*TemplateVersion)(nil)).Set("fast = ''").Set("fast_overlay = NULL").
 		Where("fast <> ''").Exec(ctx)
+	return err
+}
+
+// SetNativeSource attaches the Typst copy of a version, to be checked; an
+// empty source removes it.
+func (s *Store) SetNativeSource(ctx context.Context, versionID int64, source, sha256, by string) error {
+	var at *time.Time
+	if source != "" {
+		now := time.Now().UTC()
+		at = &now
+	} else {
+		sha256, by = "", ""
+	}
+	if _, err := s.DB.NewUpdate().Model((*TemplateVersion)(nil)).Set("native_source = ?", source).Set("native_sha256 = ?", sha256).
+		Set("native_by = ?", by).Set("native_at = ?", at).Set("native = ''").Where("id = ?", versionID).Exec(ctx); err != nil {
+		return err
+	}
+	return s.Sync(ctx)
+}
+
+// NativeSource reads the Typst copy of a version (” without one).
+func (s *Store) NativeSource(ctx context.Context, versionID int64) (string, error) {
+	var source string
+	err := s.DB.NewSelect().Model((*TemplateVersion)(nil)).Column("native_source").Where("id = ?", versionID).Scan(ctx, &source)
+	return source, err
+}
+
+// SetNative keeps the check of a Typst copy against LibreOffice.
+func (s *Store) SetNative(ctx context.Context, versionID int64, status string) error {
+	_, err := s.DB.NewUpdate().Model((*TemplateVersion)(nil)).Set("native = ?", status).Where("id = ?", versionID).Exec(ctx)
+	return err
+}
+
+// UncheckedNativeVersions lists the versions read whose Typst copy is not
+// checked yet, the published ones first, without their files.
+func (s *Store) UncheckedNativeVersions(ctx context.Context) ([]TemplateVersion, error) {
+	rows := []TemplateVersion{}
+	err := s.DB.NewSelect().Model(&rows).Column("v.id", "v.template_id", "v.number").
+		Join("JOIN templates AS t ON t.id = v.template_id AND t.kind = 'template'").
+		Where("v.native_source <> ''").Where("v.native = ''").Where("v.prepared IS NOT NULL").
+		OrderExpr("CASE WHEN t.published = v.number THEN 0 ELSE 1 END, v.id").Scan(ctx)
+	return rows, err
+}
+
+// ResetNative asks every Typst copy to be checked again, for a new version of
+// DocIbis.
+func (s *Store) ResetNative(ctx context.Context) error {
+	_, err := s.DB.NewUpdate().Model((*TemplateVersion)(nil)).Set("native = ''").Where("native <> ''").Exec(ctx)
 	return err
 }
