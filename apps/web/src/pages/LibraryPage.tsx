@@ -31,6 +31,12 @@ function message(error: unknown) {
 
 
 const badge = 'inline-flex items-center gap-1 whitespace-nowrap text-xs font-medium px-2 py-0.5 rounded-full'
+
+// The kind of a template: Word, fixed PDF, or Typst (a product name, not translated).
+function kindLabel(kind: string, t: ReturnType<typeof useI18n>['t']): string {
+  if (kind === 'typst') return 'Typst'
+  return t(kind === 'pdf' ? 'lib.kind.pdf' : 'lib.kind.template')
+}
 const tones = {
   ok: 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300',
   ko: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300',
@@ -246,7 +252,7 @@ export function LibraryPage() {
                   <Link to={`/modeles/${tpl.id}`} className="text-brand-700 dark:text-brand-400 hover:underline">{tpl.path}</Link>
                   {tpl.description && <div className="font-sans text-gray-500 mt-0.5">{tpl.description}</div>}
                 </td>
-                <td className={td}><span className={`${badge} ${tones.grey}`}>{t(tpl.kind === 'pdf' ? 'lib.kind.pdf' : 'lib.kind.template')}</span></td>
+                <td className={td}><span className={`${badge} ${tones.grey}`}>{kindLabel(tpl.kind, t)}</span></td>
                 <td className={`${td} whitespace-nowrap`}>
                   {tpl.published > 0 ? t('lib.published', { n: tpl.published }) : <span className="text-amber-700 dark:text-amber-400">{t('lib.unpublished')}</span>}
                   {tpl.versions > 1 && <span className="text-gray-400"> · {t('lib.versionsCount', { n: tpl.versions })}</span>}
@@ -423,7 +429,7 @@ export function TemplatePage() {
           <span className="font-mono text-xl break-all">{tpl.path}</span>
         </PageTitle>
         <div className="flex flex-wrap items-center gap-2 text-sm">
-          <span className={`${badge} ${tones.grey}`}>{t(tpl.kind === 'pdf' ? 'lib.kind.pdf' : 'lib.kind.template')}</span>
+          <span className={`${badge} ${tones.grey}`}>{kindLabel(tpl.kind, t)}</span>
           {tpl.published > 0 ? <span>{t('lib.published', { n: tpl.published })}</span> : <span className="text-amber-700">{t('lib.unpublished')}</span>}
           {tpl.kind === 'template' && tpl.published > 0 && <span className="text-gray-500">· <EngineBadge tpl={tpl} /></span>}
           {tpl.kind === 'template' && <CheckBadge check={tpl.check} hasReference={tpl.hasReference} />}
@@ -545,7 +551,7 @@ export function TemplatePage() {
         <section className="card">
           <h2 className="text-lg font-semibold mb-1">{t('cmp.title')}</h2>
           <p className="text-xs text-gray-500 mb-3">{t('cmp.intro')}</p>
-          <CompareVersions id={id} versions={data.versions} fixed={tpl.kind === 'pdf'} />
+          <CompareVersions id={id} versions={data.versions} fixed={tpl.kind !== 'template'} />
         </section>
       )}
 

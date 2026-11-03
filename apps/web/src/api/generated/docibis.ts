@@ -862,6 +862,7 @@ export type LibraryTemplateKind = typeof LibraryTemplateKind[keyof typeof Librar
 export const LibraryTemplateKind = {
   template: 'template',
   pdf: 'pdf',
+  typst: 'typst',
 } as const;
 
 export type LibraryTemplateDataCheck = typeof LibraryTemplateDataCheck[keyof typeof LibraryTemplateDataCheck];
@@ -1076,6 +1077,7 @@ export type TemplateContractKind = typeof TemplateContractKind[keyof typeof Temp
 export const TemplateContractKind = {
   template: 'template',
   pdf: 'pdf',
+  typst: 'typst',
 } as const;
 
 export type TemplateContractSample = { [key: string]: unknown };

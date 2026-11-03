@@ -432,7 +432,7 @@ func (s *Server) findTemplate(ctx context.Context, name string) (store.Template,
 	st := s.db.Load()
 	candidates := []string{p}
 	if path.Ext(p) == "" {
-		candidates = append(candidates, p+".docx", p+".odt", p+".pdf")
+		candidates = append(candidates, p+".docx", p+".odt", p+".pdf", p+".typ")
 	}
 	for _, c := range candidates {
 		t, ok, err := st.TemplateByPath(ctx, c)

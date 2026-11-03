@@ -177,6 +177,13 @@ func (s *Server) newVersion(ctx context.Context, p string, raw []byte, describe 
 		v.Fields, v.Sample, v.Lint = "[]", "{}", "[]"
 		return "pdf", v, nil
 	}
+	if isTypst(p) {
+		if err := checkNativeSource(raw); err != nil {
+			return "", v, err
+		}
+		v.Fields, v.Sample, v.Lint = "[]", "{}", "[]"
+		return "typst", v, nil
+	}
 	if _, err := checkTemplate(path.Base(p), raw); err != nil {
 		return "", v, err
 	}
@@ -313,8 +320,8 @@ func (s *Server) CreateTemplate(ctx context.Context, req CreateTemplateRequestOb
 		}
 		p, err = cleanPath(p)
 	}
-	if err == nil && !slices.Contains([]string{".docx", ".odt", ".pdf"}, strings.ToLower(path.Ext(p))) {
-		err = refuse("Le chemin doit finir par .docx, .odt ou .pdf : %q.", p)
+	if err == nil && !slices.Contains([]string{".docx", ".odt", ".pdf", ".typ"}, strings.ToLower(path.Ext(p))) {
+		err = refuse("Le chemin doit finir par .docx, .odt, .pdf ou .typ : %q.", p)
 	}
 	var t store.Template
 	if err == nil {
@@ -700,7 +707,7 @@ func readImport(raw []byte) (map[string]*importEntry, error) {
 		case strings.HasSuffix(lower, ".native.typ"):
 			e = entry(p[:len(p)-len(".native.typ")])
 			target = &e.native
-		case strings.HasSuffix(lower, ".docx") || strings.HasSuffix(lower, ".odt") || strings.HasSuffix(lower, ".pdf"):
+		case strings.HasSuffix(lower, ".docx") || strings.HasSuffix(lower, ".odt") || strings.HasSuffix(lower, ".pdf") || strings.HasSuffix(lower, ".typ"):
 			e = entry(p)
 			target = &e.file
 		default:

@@ -105,6 +105,13 @@ verrouillés ; les champs sans donnée sont signalés comme pour un modèle Word
 XFA ne sont pas pris en charge ; un PDF sans champs reste un PDF fixe, joint par
 \`/v1/render/batch\`.
 
+**Modèles Typst (sans Word)** : un fichier \`.typ\`, envoyé ou gardé dans la bibliothèque, est
+compilé par le moteur natif avec les données, en quelques millisecondes et sans LibreOffice.
+Les données arrivent en texte JSON : \`#let data = json(bytes(sys.inputs.data))\`, puis
+\`#data.client.nom\` ; la date du jour dans \`sys.inputs.today\`. Pas de paquet (\`@preview\`)
+ni d'autre fichier. Le PDF peut recevoir un mot de passe ou le cachet ; PDF/A, PDF accessible
+et filigrane, faits par LibreOffice, ne s'y appliquent pas.
+
 ## 4. Données manquantes
 
 Chaque modèle connaît les données qu'il lit. Une donnée absente est signalée par

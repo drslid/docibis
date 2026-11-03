@@ -3174,7 +3174,7 @@ components:
         kind:
           description: template = modèle Word ; pdf = document fixe à joindre
           type: string
-          enum: [template, pdf]
+          enum: [template, pdf, typst]
         description:
           type: string
         published:
@@ -3366,7 +3366,7 @@ components:
           type: string
         kind:
           type: string
-          enum: [template, pdf]
+          enum: [template, pdf, typst]
         version:
           type: integer
         description:
