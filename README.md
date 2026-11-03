@@ -96,8 +96,10 @@ curl -H "Authorization: Bearer $DOCIBIS_API_KEY" \
 - Template library with folders, versions, scheduled publication, rollback, comparison of two versions and checks at import.
 - Reference documents: a new version is compared page by page with the PDFs it must reproduce.
 - Bundles (several templates and PDF files in one document) and batch rendering.
-- PDF, DOCX, PDF/A-1b, 2b and 3b, accessible PDF, watermarks, passwords and permissions.
+- PDF, DOCX, PDF/A-1b, 2b and 3b, accessible PDF (PDF/UA-1, checked with veraPDF), watermarks, passwords and permissions.
 - A fast engine for fixed-layout templates, qualified automatically, in about a millisecond per document.
+- A native engine: a Typst copy of a template version, compared page by page with LibreOffice before it is used, renders in a few milliseconds; any new Word version falls back to LibreOffice until its copy is checked again.
+- Background rendering: `POST /v1/render/async` answers at once with a job; the document is read later, uploaded to a presigned S3 address, and a signed callback (HMAC, `WEBHOOK_SECRET`) tells the end.
 - An MCP server at `/v1/mcp` so that AI assistants can list templates and produce documents.
 - Administrator, editor and viewer roles, second factor (TOTP), API keys with scopes and expiry, audit log.
 - History of produced documents, statistics per template, alert rules by e-mail or Teams, Prometheus metrics.
@@ -166,6 +168,16 @@ docker compose down                # stop; data is kept in Docker volumes
 - **Uninstall:** `docker compose down -v` removes the containers **and the data**, then delete `/opt/docibis`.
 - **Settings:** limits, retention, e-mail, security and branding are set in the console, under **Configuration**.
 
+### Kubernetes
+
+A Helm chart is in `deploy/helm/docibis`: the API (with a data volume for SQLite, or PostgreSQL for several pods), the console, an optional ingress, read-only containers without privileges.
+
+```bash
+helm install docibis deploy/helm/docibis \
+  --set appSecretKey=$(openssl rand -hex 24) \
+  --set ingress.enabled=true --set ingress.host=docs.example.com
+```
+
 ## Architecture
 
 ```mermaid
@@ -175,6 +187,7 @@ flowchart LR
   Assistant[AI assistants] -->|MCP /v1/mcp| Caddy
   Caddy[web: Caddy and React console] --> API[api: Go server]
   API --> Fast[Fast engine]
+  API --> Native[Native engine: Typst]
   API --> Workers[LibreOffice workers]
   API --> DB[(SQLite or PostgreSQL)]
   DB -.->|optional copy| S3[(S3, R2 or MinIO)]
@@ -216,6 +229,7 @@ apps/api        Go API, merge engine, LibreOffice worker, migrations, OpenAPI co
 apps/web        React console and Caddy configuration
 apps/docs       Documentation site (Astro Starlight), published on GitHub Pages
 compose.yaml    Docker Compose stack used by install.sh
+deploy/helm     Helm chart for Kubernetes
 install.sh      One-line installer
 ```
 
@@ -225,7 +239,8 @@ install.sh      One-line installer
 - API keys are stored as hashes, carry scopes and can expire.
 - Session cookies are HTTP-only and secure behind HTTPS; the console sends security headers.
 - LibreOffice runs without macros or external links, as a non-root user.
-- Images given by address in the data are fetched only from allowed hosts.
+- The API image has no shell and no package manager (distroless): only the files the service runs, from Debian packages still listed for scanners. Each release image is scanned with Trivy; a fixable high or critical vulnerability stops the release.
+- Images given by address in the data are fetched only from allowed hosts; callback and upload addresses only reach allowed HTTPS hosts, never the loopback nor the metadata addresses, and are never stored nor logged.
 - Secrets, `.env` files, fonts and produced documents must never be committed.
 
 DocIbis is not affiliated with Docmosis. It reproduces the template syntax and the `/api/render` call to ease migrations; check the documents produced from your templates before switching.

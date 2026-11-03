@@ -1,0 +1,10 @@
+apiVersion: v2
+name: docibis
+description: DocIbis — documents from Word templates and JSON data, rendered by LibreOffice
+type: application
+version: 0.1.0
+appVersion: "latest"
+home: https://github.com/drslid/docibis
+sources:
+  - https://github.com/drslid/docibis
+keywords: [documents, pdf, docx, templates, libreoffice, docmosis]

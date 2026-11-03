@@ -1,0 +1,11 @@
+DocIbis is starting: LibreOffice warms up in a few seconds.
+
+{{- if .Values.ingress.enabled }}
+Console: http{{ if .Values.ingress.tls }}s{{ end }}://{{ .Values.ingress.host }}
+{{- else }}
+Console: kubectl port-forward svc/{{ include "docibis.fullname" . }} 8080:{{ .Values.service.port }}
+then http://localhost:8080
+{{- end }}
+
+The first administrator signs in with the setup code written in the logs:
+  kubectl logs deploy/{{ include "docibis.fullname" . }}-api | grep setup_code

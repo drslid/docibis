@@ -60,3 +60,5 @@ jobs:
       - run: docker compose config --quiet
         env:
           APP_SECRET_KEY: ci-only-key-with-at-least-32-characters
+      - name: Helm chart
+        run: docker run --rm -v "$PWD/deploy/helm/docibis:/chart:ro" alpine/helm:3.19.0 lint /chart --set appSecretKey=ci-only-key-with-at-least-32-characters

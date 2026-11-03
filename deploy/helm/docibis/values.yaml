@@ -1,0 +1,79 @@
+# DocIbis on Kubernetes: the API (with LibreOffice) and the console (Caddy).
+# helm install docibis deploy/helm/docibis --set appSecretKey=$(openssl rand -hex 24)
+
+image:
+  registry: ghcr.io/drslid
+  # Defaults to the chart appVersion.
+  tag: ""
+  pullPolicy: IfNotPresent
+
+# 32 characters at least: seals the second-factor secrets stored in the
+# database. Or name an existing Secret holding APP_SECRET_KEY (and, if used,
+# WEBHOOK_SECRET, METRICS_TOKEN, DATABASE_URL, SMTP_PASSWORD, AWS_*).
+appSecretKey: ""
+existingSecret: ""
+# Signs the callbacks of POST /v1/render/async (32 characters at least).
+webhookSecret: ""
+# Token of GET /metrics for Prometheus (32 characters at least).
+metricsToken: ""
+
+# Shown in the console: INT, REC, PROD…
+instanceName: PROD
+# Empty: SQLite in the data volume, one API pod only. postgres://… for
+# PostgreSQL, which allows several pods.
+databaseUrl: ""
+# Optional continuous copy of the SQLite database: s3://bucket/prefix.
+stateUrl: ""
+extraEnv: []
+
+api:
+  # More than 1 needs PostgreSQL (databaseUrl).
+  replicas: 1
+  resources:
+    requests: {cpu: "1", memory: 2Gi}
+    limits: {memory: 4Gi}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+web:
+  replicas: 1
+  resources:
+    requests: {cpu: 50m, memory: 64Mi}
+    limits: {memory: 256Mi}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+persistence:
+  # The SQLite database and its files; not needed with PostgreSQL.
+  enabled: true
+  size: 5Gi
+  storageClass: ""
+  existingClaim: ""
+
+# Licensed fonts (Microsoft or corporate .ttf/.otf) from an existing claim,
+# read by LibreOffice.
+fonts:
+  existingClaim: ""
+
+service:
+  type: ClusterIP
+  port: 80
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  host: docibis.example.com
+  tls: []
+  #  - secretName: docibis-tls
+  #    hosts: [docibis.example.com]
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 10001
+  runAsGroup: 10001
+  fsGroup: 10001
+  seccompProfile:
+    type: RuntimeDefault

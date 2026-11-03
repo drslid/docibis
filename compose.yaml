@@ -22,6 +22,8 @@ services:
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       METRICS_TOKEN: ${METRICS_TOKEN:-}
+      # Signs the callbacks of POST /v1/render/async (32 characters at least).
+      WEBHOOK_SECRET: ${WEBHOOK_SECRET:-}
     volumes:
       - data:/data
       # Licensed fonts (Microsoft or corporate .ttf/.otf), read by LibreOffice.
