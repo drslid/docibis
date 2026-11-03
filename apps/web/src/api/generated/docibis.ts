@@ -627,6 +627,8 @@ export interface RenderForm {
   keywords?: string;
   /** Mode développeur (nom Docmosis) ; les données absentes et les expressions illisibles sont écrites en surbrillance dans le document */
   devMode?: boolean;
+  /** Cachet électronique de l'organisation (signature PAdES qui certifie le PDF) ; serveur configuré avec SEAL_CERT et SEAL_KEY ; incompatible avec un mot de passe */
+  seal?: boolean;
 }
 
 export type RenderAsyncForm = RenderForm & {
@@ -2188,6 +2190,9 @@ if(renderForm.keywords !== undefined) {
 if(renderForm.devMode !== undefined) {
  formData.append(`devMode`, renderForm.devMode.toString())
  }
+if(renderForm.seal !== undefined) {
+ formData.append(`seal`, renderForm.seal.toString())
+ }
 
   return apiFetch<Blob>(getRenderDocumentUrl(),
   {
@@ -2346,6 +2351,9 @@ if(renderAsyncForm.keywords !== undefined) {
  }
 if(renderAsyncForm.devMode !== undefined) {
  formData.append(`devMode`, renderAsyncForm.devMode.toString())
+ }
+if(renderAsyncForm.seal !== undefined) {
+ formData.append(`seal`, renderAsyncForm.seal.toString())
  }
 
 if(renderAsyncForm.callbackUrl !== undefined) {

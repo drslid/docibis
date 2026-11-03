@@ -2962,6 +2962,9 @@ components:
         devMode:
           description: Mode développeur (nom Docmosis) ; les données absentes et les expressions illisibles sont écrites en surbrillance dans le document
           type: boolean
+        seal:
+          description: Cachet électronique de l'organisation (signature PAdES qui certifie le PDF) ; serveur configuré avec SEAL_CERT et SEAL_KEY ; incompatible avec un mot de passe
+          type: boolean
     RenderAsyncForm:
       allOf:
         - $ref: "#/components/schemas/RenderForm"

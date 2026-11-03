@@ -187,6 +187,9 @@ func (s *Server) produceFormPDF(ctx context.Context, f tryForm, format string) (
 	if !f.hasData || json.Unmarshal(f.data, &root) != nil {
 		return doc, refuse("Les données doivent être un objet JSON valide, par exemple { \"nom\": \"Dupont\" }.")
 	}
+	if err := f.opts.resolve(); err != nil {
+		return doc, err
+	}
 	start := time.Now()
 	content, missing, err := fillForm(ctx, f.template, root)
 	switch {

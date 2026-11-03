@@ -84,6 +84,12 @@ dans le modèle, le nom du document lui sert de titre. Pour un PDF à la fois ac
 archivable, choisissez PDF/A-2b ou PDF/A-3b : avec PDF/A-1b, il reste balisé mais sans la
 marque PDF/UA.
 
+\`seal=true\` appose le **cachet électronique** de l'organisation : une signature PAdES qui
+certifie le PDF (toute modification ultérieure se voit dans le lecteur PDF). Le serveur lit le
+certificat et sa clé dans les variables \`SEAL_CERT\` et \`SEAL_KEY\` (PEM ; un fichier
+PKCS#12 se convertit avec \`openssl pkcs12 -in cachet.p12 -nodes\`). Un PDF scellé ne peut pas
+avoir de mot de passe.
+
 \`POST /v1/render/batch\` produit plusieurs documents en un appel (un contrat et
 ses conditions générales en PDF fixe de la bibliothèque, par exemple) et les
 joint en un seul PDF, ou les rend dans un zip.

@@ -611,6 +611,9 @@ func (s *Server) produceForm(ctx context.Context, f tryForm, format string) (doc
 	if err == nil && doc.format == "pdf" {
 		doc.content, err = f.opts.protect(ctx, doc.content)
 	}
+	if err == nil && f.opts.seal {
+		doc.content, err = s.sealDocument(doc)
+	}
 	return doc, err
 }
 

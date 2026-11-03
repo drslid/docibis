@@ -39,6 +39,8 @@ type renderOptions struct {
 	meta map[string]string
 	// devMode shows in the document what cannot be filled, highlighted.
 	devMode bool
+	// seal certifies the PDF with the electronic seal of the organization.
+	seal bool
 }
 
 // restrictions of a PDF, under an owner password. Printing (0-2) and
@@ -204,6 +206,8 @@ func (o *renderOptions) set(name, value string) (bool, error) {
 		o.skipEmptyPages = yes(value, false)
 	case "devMode":
 		o.devMode = yes(value, false)
+	case "seal":
+		o.seal = yes(value, false)
 	case "title", "author", "subject", "keywords":
 		if len([]rune(value)) > 500 {
 			return true, refuse("%s : 500 caractères au plus.", name)
@@ -291,6 +295,8 @@ func (o *renderOptions) resolve() error {
 		return refuse("Les restrictions (pdfRestrictPrinting, pdfRestrictEditing, pdfRestrictCopy…) demandent un mot de passe pdfRestrictPassword.")
 	case archive && (o.password != "" || o.restrict.password != ""):
 		return refuse("Un PDF/A ne peut pas être protégé par un mot de passe : choisissez l'un ou l'autre.")
+	case o.seal && (o.password != "" || o.restrict.password != ""):
+		return refuse("Un PDF scellé (seal) ne peut pas être protégé par un mot de passe : choisissez l'un ou l'autre.")
 	}
 	if o.watermark.text == "" || !archive && !o.accessible {
 		return nil
@@ -373,6 +379,9 @@ func (o renderOptions) fields() map[string]string {
 	}
 	if o.devMode {
 		m["devMode"] = "true"
+	}
+	if o.seal {
+		m["seal"] = "true"
 	}
 	for k, v := range o.meta {
 		m[k] = v

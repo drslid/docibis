@@ -55,6 +55,9 @@ type Server struct {
 	async   asyncQueue
 	hooks   *http.Client
 	hookKey []byte
+	// sealer certifies the PDFs asked with seal (SEAL_CERT, SEAL_KEY), nil
+	// without them.
+	sealer *sealer
 }
 
 var _ StrictServerInterface = (*Server)(nil)
@@ -71,6 +74,12 @@ func NewServer(startup []StartupSetting, logger *slog.Logger) *Server {
 	}
 	if k := os.Getenv("WEBHOOK_SECRET"); k != "" && s.hookKey == nil {
 		logger.Warn("WEBHOOK_SECRET ignored: it must have at least 32 characters")
+	}
+	if sealer, err := loadSealer(); err != nil {
+		logger.Error("electronic seal not configured: PDFs asked with seal are refused", "error", err)
+	} else if sealer != nil {
+		s.sealer = sealer
+		logger.Info("electronic seal ready", "subject", sealer.chain[0].Subject.CommonName, "expires", sealer.chain[0].NotAfter.Format(time.DateOnly))
 	}
 	if k := os.Getenv("APP_SECRET_KEY"); k != "" && s.key == nil {
 		logger.Warn("APP_SECRET_KEY ignored: it must have at least 32 characters")
