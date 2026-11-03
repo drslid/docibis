@@ -62,3 +62,16 @@ jobs:
           APP_SECRET_KEY: ci-only-key-with-at-least-32-characters
       - name: Helm chart
         run: docker run --rm -v "$PWD/deploy/helm/docibis:/chart:ro" alpine/helm:3.19.0 lint /chart --set appSecretKey=ci-only-key-with-at-least-32-characters
+
+  n8n:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: integrations/n8n-nodes-docibis
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+      - run: npm install --ignore-scripts --audit=false --fund=false
+      - run: npm run build

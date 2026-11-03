@@ -90,6 +90,15 @@ joint en un seul PDF, ou les rend dans un zip.
 
 \`GET /v1/templates\` liste les modèles publiés et les données que chacun attend.
 
+**Formulaires PDF (CERFA…)** : un PDF à champs de formulaire, envoyé (\`template\`) ou
+gardé dans la bibliothèque (\`templateName\`), est rempli avec les données au lieu d'être
+fusionné. Chaque champ lit la donnée de son nom (\`client.nom\` lit \`{"client": {"nom": …}}\`),
+sinon la dernière partie de son nom sans indice (\`topmostSubform[0].Page1[0].Nom[0]\` lit
+\`Nom\`) ; une case se coche avec \`true\`, \`"oui"\` ou \`1\`. Les champs remplis sont ensuite
+verrouillés ; les champs sans donnée sont signalés comme pour un modèle Word. Les formulaires
+XFA ne sont pas pris en charge ; un PDF sans champs reste un PDF fixe, joint par
+\`/v1/render/batch\`.
+
 ## 4. Données manquantes
 
 Chaque modèle connaît les données qu'il lit. Une donnée absente est signalée par
@@ -266,8 +275,11 @@ Claude Desktop passe par le pont \`mcp-remote\` (Node.js) ; la clé reste dans u
 | \`docibis_render_document\` | Produit le PDF ou le Word d'un modèle et de ses données ; le document revient en pièce jointe. |
 | \`docibis_list_documents\` | Les derniers documents produits, avec recherche et filtre sur le résultat. |
 | \`docibis_stats\` | Les chiffres du tableau de bord : volumes, taux de réussite, durées. |
+| \`docibis_native_context\` | Pour écrire la copie Typst d'une version (moteur natif) : champs, jeux d'essai, règles, pages de LibreOffice en images. Éditeur. |
+| \`docibis_native_preview\` | Compile une copie et la compare à LibreOffice (pages, texte, écart en ‰), sans l'enregistrer. Éditeur. |
+| \`docibis_native_submit\` | Joint la copie à la version ; DocIbis la compare sur tous les jeux d'essai avant de l'utiliser. Administrateur. |
 
-L'assistant ne produit un document que si on le lui demande ; rien n'est modifié dans DocIbis par ces outils.
+L'assistant ne produit un document que si on le lui demande. Les outils de la copie Typst demandent un jeton personnel (\`dit_…\`) : avec une clé d'application, ils sont refusés ; ils ne modifient la bibliothèque que par \`docibis_native_submit\`, tracé dans le journal d'audit.
 `
 }
 

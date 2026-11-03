@@ -1,0 +1,46 @@
+{
+  "name": "n8n-nodes-docibis",
+  "version": "0.1.0",
+  "description": "n8n node for DocIbis: PDF and Word documents from Word templates (Docmosis tags) and JSON data",
+  "keywords": [
+    "n8n-community-node-package",
+    "docibis",
+    "docmosis",
+    "pdf",
+    "docx",
+    "documents",
+    "templates"
+  ],
+  "license": "MIT",
+  "homepage": "https://github.com/drslid/docibis",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/drslid/docibis.git",
+    "directory": "integrations/n8n-nodes-docibis"
+  },
+  "main": "index.js",
+  "scripts": {
+    "build": "tsc && cp nodes/DocIbis/docibis.svg dist/nodes/DocIbis/",
+    "typecheck": "tsc --noEmit"
+  },
+  "files": [
+    "dist"
+  ],
+  "n8n": {
+    "n8nNodesApiVersion": 1,
+    "credentials": [
+      "dist/credentials/DocIbisApi.credentials.js"
+    ],
+    "nodes": [
+      "dist/nodes/DocIbis/DocIbis.node.js"
+    ]
+  },
+  "devDependencies": {
+    "@types/node": "24.19.2",
+    "n8n-workflow": "2.45.1",
+    "typescript": "6.0.3"
+  },
+  "peerDependencies": {
+    "n8n-workflow": "*"
+  }
+}

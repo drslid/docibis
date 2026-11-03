@@ -28,6 +28,8 @@ Appelez d'abord docibis_whoami. Pour produire un document : docibis_analyze_temp
 
 docibis_list_documents et docibis_stats renseignent sur les documents déjà produits ; les documents eux-mêmes ne sont pas gardés.
 
+Moteur natif : avec un jeton personnel, docibis_native_context, docibis_native_preview et docibis_native_submit aident à écrire la copie Typst d'une version de modèle, que DocIbis compare à LibreOffice avant de l'utiliser.
+
 Ne produisez un document que si l'utilisateur le demande.`
 
 func readOnly() *mcp.ToolAnnotations {
@@ -310,6 +312,7 @@ func (s *Server) mcpServer() *mcp.Server {
 		}
 		return nil, &out, nil
 	})
+	s.addNativeTools(server)
 	return server
 }
 

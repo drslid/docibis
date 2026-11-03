@@ -462,7 +462,7 @@ func (s *Server) resolve(ctx context.Context, f *tryForm) error {
 	if err != nil {
 		return err
 	}
-	if t.Kind != "template" {
+	if t.Kind != "template" && !bytes.Contains(v.Content, []byte("/AcroForm")) {
 		return refuse("%q est un PDF fixe : il se joint aux documents (/v1/render/batch), il ne se remplit pas.", t.Path)
 	}
 	f.name, f.template, f.check, f.prepared = path.Base(t.Path), v.Content, t.DataCheck, v.Prepared
@@ -615,6 +615,10 @@ func (s *Server) produceForm(ctx context.Context, f tryForm, format string) (doc
 }
 
 func (s *Server) produceDocument(ctx context.Context, f tryForm, format string) (document, error) {
+	// A PDF form is filled, not merged.
+	if err := s.resolve(ctx, &f); err == nil && isPDF(f.template) {
+		return s.produceFormPDF(ctx, f, format)
+	}
 	odt, prep, dir, err := s.openForm(ctx, &f)
 	doc := document{name: f.name, format: format, outputName: f.outputName, libID: f.libID, libVersion: f.libVersion, opts: f.opts}
 	if f.hasData {

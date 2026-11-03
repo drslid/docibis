@@ -243,7 +243,7 @@ func (s *Server) submit(ctx context.Context, body *multipart.Reader) (RenderJob,
 	if err := s.resolve(ctx, &f); err != nil {
 		return RenderJob{}, err
 	}
-	if _, err := checkTemplate(f.name, f.template); err != nil {
+	if _, err := checkTemplate(f.name, f.template); err != nil && !isPDF(f.template) {
 		return RenderJob{}, err
 	}
 	format := cmp.Or(f.format, "pdf")

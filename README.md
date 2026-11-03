@@ -100,6 +100,8 @@ curl -H "Authorization: Bearer $DOCIBIS_API_KEY" \
 - A fast engine for fixed-layout templates, qualified automatically, in about a millisecond per document.
 - A native engine: a Typst copy of a template version, compared page by page with LibreOffice before it is used, renders in a few milliseconds; any new Word version falls back to LibreOffice until its copy is checked again.
 - Background rendering: `POST /v1/render/async` answers at once with a job; the document is read later, uploaded to a presigned S3 address, and a signed callback (HMAC, `WEBHOOK_SECRET`) tells the end.
+- PDF forms (CERFA and others): a PDF with form fields is filled with the data, then its fields are locked.
+- An n8n node (`integrations/n8n-nodes-docibis`): render now or in the background, follow a job, list the templates.
 - An MCP server at `/v1/mcp` so that AI assistants can list templates and produce documents.
 - Administrator, editor and viewer roles, second factor (TOTP), API keys with scopes and expiry, audit log.
 - History of produced documents, statistics per template, alert rules by e-mail or Teams, Prometheus metrics.
@@ -170,7 +172,7 @@ docker compose down                # stop; data is kept in Docker volumes
 
 ### Kubernetes
 
-A Helm chart is in `deploy/helm/docibis`: the API (with a data volume for SQLite, or PostgreSQL for several pods), the console, an optional ingress, read-only containers without privileges.
+A Helm chart is in `deploy/helm/docibis`: the API (with a data volume for SQLite, or PostgreSQL for several pods), the console, an optional ingress, read-only containers without privileges. The images are published for `linux/amd64` and `linux/arm64` (AWS Graviton, Ampere), usually cheaper.
 
 ```bash
 helm install docibis deploy/helm/docibis \
@@ -230,6 +232,7 @@ apps/web        React console and Caddy configuration
 apps/docs       Documentation site (Astro Starlight), published on GitHub Pages
 compose.yaml    Docker Compose stack used by install.sh
 deploy/helm     Helm chart for Kubernetes
+integrations    n8n node
 install.sh      One-line installer
 ```
 
