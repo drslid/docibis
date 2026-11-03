@@ -50,6 +50,7 @@ func Analyze(template []byte) (Analysis, error) {
 		return a, fmt.Errorf("template is not an ODT: %w", err)
 	}
 	unsupported := map[string]bool{}
+	refs := false
 	for _, f := range zr.File {
 		if !parts[f.Name] {
 			continue
@@ -110,6 +111,9 @@ func Analyze(template []byte) (Analysis, error) {
 			case strings.HasPrefix(tag, "op:"):
 				// The paragraph may go: what follows moves up.
 				a.BlockSections++
+			case strings.HasPrefix(tag, "ref:"):
+				// A shared block: its text comes from another template.
+				refs = true
 			case strings.HasPrefix(tag, "link:"), strings.HasPrefix(tag, "link_"):
 				a.Fields++
 				a.FlowFields++
@@ -151,6 +155,8 @@ func Analyze(template []byte) (Analysis, error) {
 	switch {
 	case len(a.Unsupported) > 0:
 		a.Engine, a.Reason = "standard", "syntaxe pas encore prise en charge : "+strings.Join(a.Unsupported, ", ")
+	case refs:
+		a.Engine, a.Reason = "standard", "blocs partagés (<<ref:…>>) : leur texte vient d'autres modèles"
 	case a.Repeats == 0 && a.BlockSections == 0 && a.FlowFields == 0:
 		a.Engine, a.Reason = "overlay", "mise en page fixe : "+count(a.Fields, "champ en bout de ligne", "champs en bout de ligne")+", "+
 			count(a.Checkboxes, "case", "cases")+", "+count(a.Images, "image", "images")

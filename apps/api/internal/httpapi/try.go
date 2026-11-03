@@ -651,6 +651,9 @@ func (s *Server) produceDocument(ctx context.Context, f tryForm, format string) 
 	if !f.hasData || json.Unmarshal(f.data, &root) != nil {
 		return doc, refuse("Les données doivent être un objet JSON valide, par exemple { \"nom\": \"Dupont\" }.")
 	}
+	if odt, err = s.includeBlocks(ctx, odt); err != nil {
+		return doc, err
+	}
 	if doc.missing, err = s.checkData(f, odt, root); err != nil {
 		return doc, err
 	}

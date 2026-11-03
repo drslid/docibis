@@ -199,6 +199,7 @@ func lintTags(tree *node, add func(level, code, format string, args ...any)) int
 		case strings.HasPrefix(tag, "{"):
 			lintExpr(strings.Trim(tag, "{}"), tag, add)
 		case strings.HasPrefix(path, "$"):
+		case strings.HasPrefix(tag, "ref:"):
 		case strings.HasPrefix(tag, "op:") || strings.HasPrefix(tag, "link:") || strings.HasPrefix(tag, "link_"):
 			if _, rest := fieldPrefix(path); !plainPath.MatchString(rest) {
 				add("error", "path", "Balise illisible : « <<%s>> » (lettres, chiffres, points et _ seulement après le préfixe).", short(tag))

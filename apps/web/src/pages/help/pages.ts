@@ -408,6 +408,15 @@ mal fermées ou coupées par Word, sections \`cs_\`/\`rs_\` sans \`es_\`, foncti
 polices absentes du serveur (remplacées, donc mise en page différente), révisions et
 commentaires Word oubliés. Le résultat s'affiche dans la bibliothèque et sur la page Essai.
 
+## Blocs partagés
+
+Un paragraphe qui ne contient que \`<<ref:clauses/rgpd>>\` est remplacé par le contenu du
+modèle \`clauses/rgpd\` de la bibliothèque (sa version publiée), rempli avec les mêmes données :
+une clause, un bloc de signature, des mentions légales écrits une seule fois pour tous les
+modèles. Le bloc garde sa mise en forme et ses images ; un bloc peut en inclure un autre
+(4 niveaux au plus). Publier une nouvelle version du bloc change tous les documents qui
+l'incluent. Un modèle avec des blocs partagés est toujours produit par LibreOffice.
+
 ## Liasses
 
 Une liasse (page [Liasses](/liasses)) produit plusieurs documents en un appel : des modèles
