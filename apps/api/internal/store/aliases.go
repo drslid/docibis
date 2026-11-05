@@ -167,3 +167,28 @@ func (s *Store) DeleteTemplateAlias(ctx context.Context, templateID int64, alias
 	}
 	return true, s.Sync(ctx)
 }
+
+// AddTemplateAlias gives a template a former name, as an import from another
+// environment does. false when the template already answers to it;
+// ErrNameTaken when another template does.
+func (s *Store) AddTemplateAlias(ctx context.Context, templateID int64, alias, by string) (bool, error) {
+	added := false
+	err := s.DB.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+		owner, err := nameOwner(ctx, tx, alias)
+		switch {
+		case err != nil:
+			return err
+		case owner == templateID:
+			return nil
+		case owner != 0:
+			return ErrNameTaken
+		}
+		_, err = tx.NewInsert().Model(&TemplateAlias{Alias: alias, TemplateID: templateID, CreatedAt: time.Now().UTC(), CreatedBy: by}).Exec(ctx)
+		added = err == nil
+		return err
+	})
+	if err != nil || !added {
+		return false, err
+	}
+	return true, s.Sync(ctx)
+}

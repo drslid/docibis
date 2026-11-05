@@ -139,6 +139,7 @@ function ImportTemplates({ onDone }: { onDone: () => void }) {
       {report && (
         <div className="text-sm" aria-live="polite">
           <p className="font-medium">{t('lib.importReport', { created: report.created, updated: report.updated, unchanged: report.unchanged, references: report.references })}</p>
+          {!!report.aliases && <p>{t('lib.importAliases', { n: report.aliases })}</p>}
           {report.errors.length > 0 && (
             <>
               <p className="text-red-700 dark:text-red-400 mt-2">{t('lib.importErrors')}</p>

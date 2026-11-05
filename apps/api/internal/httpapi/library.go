@@ -636,8 +636,8 @@ func (s *Server) CheckAllTemplates(ctx context.Context, _ CheckAllTemplatesReque
 // stay packed in the zip until the template is imported, one at a time: the
 // zip may unpack to 1 GB, more than the memory of the task.
 type importEntry struct {
-	file, reference, data, native []byte
-	packed                        map[*[]byte]*zip.File
+	file, reference, data, native, aliases []byte
+	packed                                 map[*[]byte]*zip.File
 }
 
 // unpack reads the parts of the entry from the zip.
@@ -674,8 +674,8 @@ func (s *Server) ImportTemplates(ctx context.Context, req ImportTemplatesRequest
 
 // readImport reads a zip of templates: each X.docx (or .odt, .pdf) may come
 // with X.reference.pdf, the PDF Docmosis made, and X.data.json, its data,
-// and X.native.typ, its Typst copy for the native engine. A leading
-// templates/ folder is dropped.
+// X.native.typ, its Typst copy for the native engine, and X.aliases.txt, its
+// former names, one per line. A leading templates/ folder is dropped.
 func readImport(raw []byte) (map[string]*importEntry, error) {
 	zr, err := zip.NewReader(bytes.NewReader(raw), int64(len(raw)))
 	if err != nil {
@@ -715,6 +715,9 @@ func readImport(raw []byte) (map[string]*importEntry, error) {
 		case strings.HasSuffix(lower, ".native.typ"):
 			e = entry(p[:len(p)-len(".native.typ")])
 			target = &e.native
+		case strings.HasSuffix(lower, ".aliases.txt"):
+			e = entry(p[:len(p)-len(".aliases.txt")])
+			target = &e.aliases
 		case strings.HasSuffix(lower, ".docx") || strings.HasSuffix(lower, ".odt") || strings.HasSuffix(lower, ".pdf") || strings.HasSuffix(lower, ".typ"):
 			e = entry(p)
 			target = &e.file
@@ -794,6 +797,21 @@ func (s *Server) importOne(ctx context.Context, report *ImportReport, p string, 
 			report.Errors = append(report.Errors, p+" (copie Typst) : "+trimmed(pb.Detail))
 		} else if changed {
 			report.Natives = ptr(valueOf(report.Natives) + 1)
+		}
+	}
+	for _, line := range strings.Split(string(e.aliases), "\n") {
+		name, err := cleanPath(strings.TrimSpace(line))
+		if err != nil || name == "" || name == t.Path {
+			continue
+		}
+		added, err := st.AddTemplateAlias(ctx, t.ID, name, actor)
+		switch {
+		case errors.Is(err, store.ErrNameTaken):
+			report.Errors = append(report.Errors, fmt.Sprintf("%s (ancien nom %s) : un autre modèle porte déjà ce nom.", p, name))
+		case err != nil:
+			report.Errors = append(report.Errors, fmt.Sprintf("%s (ancien nom %s) : %v", p, name, err))
+		case added:
+			report.Aliases = ptr(valueOf(report.Aliases) + 1)
 		}
 	}
 }
@@ -897,6 +915,13 @@ func (s *Server) ExportTemplates(ctx context.Context, _ ExportTemplatesRequestOb
 		}
 		if v.NativeSource != "" {
 			if err := add(t.Path+".native.typ", []byte(v.NativeSource)); err != nil {
+				return nil, err
+			}
+		}
+		if aliases, err := aliasesFile(ctx, st, t.ID); err != nil {
+			return nil, err
+		} else if len(aliases) > 0 {
+			if err := add(t.Path+".aliases.txt", aliases); err != nil {
 				return nil, err
 			}
 		}

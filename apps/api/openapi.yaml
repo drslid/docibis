@@ -3551,6 +3551,9 @@ components:
         natives:
           description: Copies Typst jointes (X.docx.native.typ)
           type: integer
+        aliases:
+          description: Anciens noms ajoutés (X.docx.aliases.txt, un par ligne)
+          type: integer
         errors:
           type: array
           items:

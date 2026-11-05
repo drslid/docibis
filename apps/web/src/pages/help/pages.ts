@@ -455,7 +455,8 @@ qui trouve toujours le modèle (production, import, liasses). Les applications q
 encore l'ancien nom (celui de Docmosis, par exemple) continuent de marcher ; un administrateur
 retire un ancien nom quand plus personne ne l'appelle. **Fusionner** réunit deux modèles en
 un : les versions de l'autre dont le fichier manque s'ajoutent dans leur ordre, ses noms
-deviennent des anciens noms, puis il est supprimé.
+deviennent des anciens noms, puis il est supprimé. L'export et l'envoi vers un autre
+environnement emportent les anciens noms (fichier \`X.docx.aliases.txt\`, un nom par ligne).
 
 ## D'un environnement à l'autre
 

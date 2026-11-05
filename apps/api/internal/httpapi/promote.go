@@ -156,8 +156,9 @@ func (s *Server) ListPromotions(ctx context.Context, req ListPromotionsRequestOb
 }
 
 // versionZip packs a version as the import reads it: the template, its
-// reference with its data, and its Typst copy.
-func versionZip(t store.Template, v store.TemplateVersion) ([]byte, error) {
+// reference with its data, its Typst copy and the former names of the
+// template.
+func versionZip(t store.Template, v store.TemplateVersion, aliases []byte) ([]byte, error) {
 	var buf bytes.Buffer
 	zw := zip.NewWriter(&buf)
 	add := func(name string, content []byte) error {
@@ -183,6 +184,11 @@ func versionZip(t store.Template, v store.TemplateVersion) ([]byte, error) {
 			return nil, err
 		}
 	}
+	if len(aliases) > 0 {
+		if err := add(t.Path+".aliases.txt", aliases); err != nil {
+			return nil, err
+		}
+	}
 	if err := zw.Close(); err != nil {
 		return nil, err
 	}
@@ -196,7 +202,11 @@ var promotionClient = &http.Client{
 
 // sendVersion posts a version to another DocIbis and tells what it did.
 func (s *Server) sendVersion(ctx context.Context, env environment, t store.Template, v store.TemplateVersion, publish bool) (string, error) {
-	pack, err := versionZip(t, v)
+	aliases, err := aliasesFile(ctx, s.db.Load(), t.ID)
+	if err != nil {
+		return "", err
+	}
+	pack, err := versionZip(t, v, aliases)
 	if err != nil {
 		return "", err
 	}
@@ -260,6 +270,9 @@ func (s *Server) sendVersion(ctx context.Context, env environment, t store.Templ
 	}
 	if report.References > 0 {
 		what = append(what, "avec sa référence")
+	}
+	if n := valueOf(report.Aliases); n > 0 {
+		what = append(what, fmt.Sprintf("%d ancien(s) nom(s)", n))
 	}
 	if publish {
 		what = append(what, "publiée")

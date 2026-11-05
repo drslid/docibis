@@ -126,4 +126,43 @@ func TestRenameAndMergeKeepFormerNames(t *testing.T) {
 	if code, _ := render(broker); code != http.StatusNotFound {
 		t.Fatalf("render a removed name: %d", code)
 	}
+
+	// The former names go with the export to another environment.
+	export := c.raw(http.MethodGet, "/api/templates/export", "", nil)
+	zr, err := zip.NewReader(bytes.NewReader(export.Body.Bytes()), int64(export.Body.Len()))
+	if export.Code != http.StatusOK || err != nil {
+		t.Fatalf("export: %d %v", export.Code, err)
+	}
+	listed := ""
+	for _, f := range zr.File {
+		if strings.HasSuffix(f.Name, ".aliases.txt") {
+			r, _ := f.Open()
+			raw := new(bytes.Buffer)
+			_, _ = raw.ReadFrom(r)
+			listed = f.Name + ":" + raw.String()
+		}
+	}
+	if listed != "templates/habitation/direct/mensuel/fiche-conseil.odt.aliases.txt:"+direct+"\n" {
+		t.Fatalf("former names in the export: %q", listed)
+	}
+	other, otherSetup := open(t, nil)
+	c2 := &client{t: t, h: other.Handler()}
+	if code, _, _ := c2.do(http.MethodPost, "/api/auth/setup", map[string]string{"setupCode": otherSetup.String(), "username": "admin", "password": "a long enough password"}); code != http.StatusOK {
+		t.Fatalf("setup of the other environment: %d", code)
+	}
+	other.SetRenderer(&fakeRenderer{})
+	for i, want := range []float64{1, 0} {
+		code, report := c2.send(http.MethodPost, "/api/templates/import", map[string]part{"file": {"export.zip", export.Body.Bytes()}}, nil)
+		if code != http.StatusOK || valueOrZero(report["aliases"]) != want || len(report["errors"].([]any)) != 0 {
+			t.Fatalf("import %d in the other environment: %d %v", i+1, code, report)
+		}
+	}
+	if code, list := c2.list("/api/templates?q=" + url.QueryEscape(direct)); code != http.StatusOK || len(list) != 1 || list[0]["path"] != "habitation/direct/mensuel/fiche-conseil.odt" {
+		t.Fatalf("former name in the other environment: %d %v", code, list)
+	}
+}
+
+func valueOrZero(v any) float64 {
+	f, _ := v.(float64)
+	return f
 }

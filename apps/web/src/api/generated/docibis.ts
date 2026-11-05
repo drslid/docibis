@@ -1157,6 +1157,8 @@ export interface ImportReport {
   references: number;
   /** Copies Typst jointes (X.docx.native.typ) */
   natives?: number;
+  /** Anciens noms ajoutés (X.docx.aliases.txt, un par ligne) */
+  aliases?: number;
   errors: string[];
 }
 

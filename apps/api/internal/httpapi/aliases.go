@@ -11,6 +11,20 @@ import (
 	"docibis/internal/store"
 )
 
+// aliasesFile lists the former names of a template, one per line: the
+// X.aliases.txt of a zip of templates.
+func aliasesFile(ctx context.Context, st *store.Store, id int64) ([]byte, error) {
+	rows, err := st.TemplateAliases(ctx, id)
+	if err != nil || len(rows) == 0 {
+		return nil, err
+	}
+	var b strings.Builder
+	for _, a := range rows {
+		b.WriteString(a.Alias + "\n")
+	}
+	return []byte(b.String()), nil
+}
+
 // RenameTemplate gives a template a new path; the old one becomes a former
 // name, so that the applications still calling it find the template.
 func (s *Server) RenameTemplate(ctx context.Context, req RenameTemplateRequestObject) (RenameTemplateResponseObject, error) {
