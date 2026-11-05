@@ -442,6 +442,21 @@ curl -H "Authorization: Bearer $DOCIBIS_KEY" -H "Content-Type: application/json"
   -o souscription.pdf ${origin}/v1/bundles/souscription-habitation/render
 \`\`\`
 
+## Noms des modèles
+
+Un nom est un chemin, rangé comme des dossiers. Choisissez une règle simple et gardez-la, par
+exemple \`produit/canal/document\` en minuscules, mots reliés par \`-\` :
+\`habitation/direct/fiche-conseil.docx\`, appelé \`habitation/direct/fiche-conseil\`. Un niveau
+disparaît quand le même document sert à toutes ses valeurs : \`habitation/fiche-conseil.docx\`
+sert à tous les canaux.
+
+Sur la page d'un modèle, **Renommer** change son chemin : l'ancien devient un **ancien nom**,
+qui trouve toujours le modèle (production, import, liasses). Les applications qui appellent
+encore l'ancien nom (celui de Docmosis, par exemple) continuent de marcher ; un administrateur
+retire un ancien nom quand plus personne ne l'appelle. **Fusionner** réunit deux modèles en
+un : les versions de l'autre dont le fichier manque s'ajoutent dans leur ordre, ses noms
+deviennent des anciens noms, puis il est supprimé.
+
 ## D'un environnement à l'autre
 
 Sur la page d'un modèle, **Envoyer à** pousse une version (avec sa référence) vers REC ou

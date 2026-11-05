@@ -77,7 +77,7 @@ func (s *Server) checkBundle(ctx context.Context, in *BundleInput, b *store.Bund
 		if err != nil {
 			return refuse("Document %d : chemin invalide.", i+1)
 		}
-		if _, ok, err := st.TemplateByPath(ctx, p); err != nil {
+		if _, ok, err := st.TemplateByName(ctx, p); err != nil {
 			return err
 		} else if !ok {
 			return refuse("Document %d : %q n'est pas dans la bibliothèque.", i+1, p)

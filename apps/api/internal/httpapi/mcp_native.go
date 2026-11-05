@@ -107,7 +107,7 @@ func (s *Server) nativeTarget(ctx context.Context, name string, number int) (sto
 		candidates = append(candidates, p+".docx", p+".odt")
 	}
 	for _, c := range candidates {
-		t, ok, err := st.TemplateByPath(ctx, c)
+		t, ok, err := st.TemplateByName(ctx, c)
 		if err != nil || !ok {
 			if err != nil {
 				return t, store.TemplateVersion{}, err

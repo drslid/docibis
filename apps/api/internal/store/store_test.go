@@ -112,6 +112,7 @@ func TestPostgres(t *testing.T) {
 	checkAPIKeys(t, s)
 	checkHistory(t, s)
 	checkTemplates(t, s)
+	checkAliases(t, s)
 	checkRenderJobs(t, s)
 }
 

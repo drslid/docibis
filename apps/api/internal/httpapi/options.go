@@ -423,7 +423,7 @@ func cleanPath(name string) (string, error) {
 var errNoTemplate = errors.New("no template")
 
 // findTemplate returns the published version of a template of the library,
-// also found without its extension, as Docmosis does.
+// also found without its extension, as Docmosis does, or by a former name.
 func (s *Server) findTemplate(ctx context.Context, name string) (store.Template, store.TemplateVersion, error) {
 	p, err := cleanPath(name)
 	if err != nil {
@@ -435,7 +435,7 @@ func (s *Server) findTemplate(ctx context.Context, name string) (store.Template,
 		candidates = append(candidates, p+".docx", p+".odt", p+".pdf", p+".typ")
 	}
 	for _, c := range candidates {
-		t, ok, err := st.TemplateByPath(ctx, c)
+		t, ok, err := st.TemplateByName(ctx, c)
 		if err != nil {
 			return t, store.TemplateVersion{}, err
 		}

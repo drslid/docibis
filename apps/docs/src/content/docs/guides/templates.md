@@ -50,5 +50,6 @@ The example invoice and its data give this PDF, with the rows repeated and the t
 - **Checks at import.** DocIbis reads the template when you add it and reports what would fail, such as a section that is never closed.
 - **The data it expects.** The console lists the fields the template uses and generates sample JSON.
 - **Versions.** Each upload creates a version. Applications always get the published one; you can plan a publication at a date and go back to the previous version.
+- **Names.** Rename a template and its old path stays a former name: applications that still call it keep working until an administrator removes it. Merging two templates adds the other's missing versions, in their order, and keeps its names.
 - **Reference documents.** Attach the PDFs a template must reproduce (for example the ones Docmosis made): DocIbis compares each new version with them, page by page.
 - **Data check.** Per template, choose what happens when the data lacks a field: refuse the call (`strict`), report it in the `X-Missing-Fields` header (`warn`), or ignore it (`off`).

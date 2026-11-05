@@ -26,6 +26,7 @@ const detail: TemplateDetail = {
     { number: 2, size: 120_000, sha256: 'b', engine: 'overlay', note: 'texte revu', hasReference: true, check: fiche.check, createdAt: '2026-10-17T10:00:00Z', createdBy: 'eve' },
     { number: 1, size: 118_000, sha256: 'a', engine: 'overlay', note: 'import', hasReference: false, createdAt: '2026-10-16T10:00:00Z', createdBy: 'admin' },
   ],
+  aliases: [],
 }
 const note = (id: number, version: string): Release => ({ id, version, title: `Version ${version}`, content: '- **Bibliothèque** de modèles', createdBy: 'admin', createdAt: '2026-10-17T10:00:00Z', updatedAt: '2026-10-17T10:00:00Z' })
 
@@ -126,6 +127,25 @@ describe('TemplatePage', () => {
     const source = new File(['= Proposition'], 'tarif.typ', { type: 'text/plain' })
     fireEvent.change(screen.getByLabelText('Joindre une copie Typst'), { target: { files: [source] } })
     await waitFor(() => expect(calls.some((c) => c.url === '/api/templates/7/versions/2/native' && c.method === 'PUT' && c.body instanceof FormData)).toBe(true))
+  })
+
+  it('renames a template, lists its former names and lets an administrator remove one', async () => {
+    const renamed: TemplateDetail = { ...detail, template: { ...fiche, path: 'habitation/direct/mensuel/fiche-conseil.docx' }, aliases: ['acme/contracts/fiche_conseil.docx'] }
+    const calls = serve((url, method) => {
+      if (url === '/api/templates/7' && method === 'GET') return detail
+      if (url === '/api/templates' && method === 'GET') return [fiche, cg]
+      if (url === '/api/templates/7/rename' && method === 'POST') return renamed
+      if (url.startsWith('/api/templates/7/aliases') && method === 'DELETE') return {}
+      return undefined
+    })
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    show(<TemplatePage />, '/modeles/7')
+    fireEvent.change(await screen.findByDisplayValue('acme/contracts/fiche_conseil.docx'), { target: { value: 'habitation/direct/mensuel/fiche-conseil.docx' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Renommer' }))
+    await waitFor(() => expect(calls.some((c) => c.url === '/api/templates/7/rename' && c.body === '{"path":"habitation/direct/mensuel/fiche-conseil.docx"}')).toBe(true))
+    expect(await screen.findByText('Anciens noms')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Retirer l’ancien nom acme/contracts/fiche_conseil.docx' }))
+    await waitFor(() => expect(calls.some((c) => c.method === 'DELETE' && c.url === '/api/templates/7/aliases?name=acme%2Fcontracts%2Ffiche_conseil.docx')).toBe(true))
   })
 })
 

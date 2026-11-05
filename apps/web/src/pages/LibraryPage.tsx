@@ -18,6 +18,7 @@ import { TagCheatSheet } from '@/components/help/TagCheatSheet'
 import { CompareVersions } from '@/components/library/CompareVersions'
 import { FastPanel } from '@/components/library/FastPanel'
 import { LintBadge, LintList } from '@/components/library/LintList'
+import { NamesPanel } from '@/components/library/NamesPanel'
 import { NativePanel } from '@/components/library/NativePanel'
 import { PromotePanel } from '@/components/library/PromotePanel'
 import { TemplateStats } from '@/components/library/TemplateStats'
@@ -479,6 +480,8 @@ export function TemplatePage() {
         )}
         {update.error && <p className="text-sm text-red-700 md:col-span-2" role="alert">{message(update.error)}</p>}
       </section>
+
+      <NamesPanel tpl={tpl} aliases={data.aliases} editor={editor} admin={admin} onChange={set} />
 
       {tpl.kind === 'template' && (
         <section className="card">

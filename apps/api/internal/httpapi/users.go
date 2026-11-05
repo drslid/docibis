@@ -25,6 +25,7 @@ func requiredRole(method, path string) string {
 		strings.HasPrefix(path, "/api/releases") && write,
 		strings.HasPrefix(path, "/api/environments") && write,
 		strings.HasPrefix(path, "/api/templates") && strings.HasSuffix(path, "/native") && method == http.MethodPut,
+		strings.HasPrefix(path, "/api/templates") && strings.HasSuffix(path, "/merge"),
 		strings.HasPrefix(path, "/api/templates") && (method == http.MethodDelete || path == "/api/templates/check-all"):
 		return "admin"
 	case strings.HasPrefix(path, "/api/try/"),

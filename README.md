@@ -94,6 +94,7 @@ curl -H "Authorization: Bearer $DOCIBIS_API_KEY" \
 - REST API under `/v1`, described by an OpenAPI contract, with an interactive reference at `/docs`.
 - Docmosis-compatible `POST /api/render`: point existing clients to DocIbis.
 - Template library with folders, versions, scheduled publication, rollback, comparison of two versions and checks at import.
+- Renaming and merging templates: former names keep working, so applications move to the new names at their own pace.
 - Reference documents: a new version is compared page by page with the PDFs it must reproduce.
 - Bundles (several templates and PDF files in one document) and batch rendering.
 - PDF, DOCX, PDF/A-1b, 2b and 3b, accessible PDF (PDF/UA-1, checked with veraPDF), watermarks, passwords and permissions.

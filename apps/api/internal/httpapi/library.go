@@ -104,12 +104,19 @@ func (s *Server) detail(ctx context.Context, id int64) (TemplateDetail, bool, er
 	if err != nil {
 		return TemplateDetail{}, false, err
 	}
-	out := TemplateDetail{Template: libraryTemplate(t), Versions: make([]LibraryVersion, 0, len(versions)), Fields: []TemplateField{}}
+	out := TemplateDetail{Template: libraryTemplate(t), Versions: make([]LibraryVersion, 0, len(versions)), Fields: []TemplateField{}, Aliases: []string{}}
 	for i, v := range versions {
 		out.Versions = append(out.Versions, libraryVersion(v))
 		if v.Number == t.Published || t.Published == 0 && i == 0 {
 			out.Fields, out.Sample = templateFields(v.Fields), sampleData(v.Sample)
 		}
+	}
+	aliases, err := st.TemplateAliases(ctx, id)
+	if err != nil {
+		return TemplateDetail{}, false, err
+	}
+	for _, a := range aliases {
+		out.Aliases = append(out.Aliases, a.Alias)
 	}
 	return out, true, nil
 }
@@ -325,11 +332,12 @@ func (s *Server) CreateTemplate(ctx context.Context, req CreateTemplateRequestOb
 	}
 	var t store.Template
 	if err == nil {
-		var exists bool
-		if _, exists, err = s.db.Load().TemplateByPath(ctx, p); err != nil {
-			return nil, err
-		} else if exists {
+		if owner, found, ferr := s.db.Load().TemplateByName(ctx, p); ferr != nil {
+			return nil, ferr
+		} else if found && owner.Path == p {
 			err = refuse("%q est déjà dans la bibliothèque : ajoutez-lui une version.", p)
+		} else if found {
+			err = refuse("%q est un ancien nom de %q : ajoutez-lui une version, ou retirez d'abord cet ancien nom.", p, owner.Path)
 		}
 	}
 	var v store.TemplateVersion
@@ -748,7 +756,7 @@ func (s *Server) importTemplates(ctx context.Context, entries map[string]*import
 // importOne imports a template of the zip and what goes with it.
 func (s *Server) importOne(ctx context.Context, report *ImportReport, p string, e *importEntry, actor string, publish bool) {
 	st := s.db.Load()
-	t, exists, err := st.TemplateByPath(ctx, p)
+	t, exists, err := st.TemplateByName(ctx, p)
 	if err != nil {
 		report.Errors = append(report.Errors, fmt.Sprintf("%s : %v", p, err))
 		return

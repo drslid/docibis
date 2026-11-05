@@ -93,14 +93,16 @@ func (s *Store) templates() *bun.SelectQuery {
 		Join("LEFT JOIN template_versions AS p ON p.template_id = t.id AND p.number = t.published")
 }
 
-// Templates lists the library, by path; text filters the path and description.
+// Templates lists the library, by path; text filters the path, the former
+// names and the description.
 func (s *Store) Templates(ctx context.Context, text string) ([]Template, error) {
 	rows := []Template{}
 	q := s.templates().Order("t.path")
 	if text != "" {
 		pattern := likePattern(text)
 		q = q.WhereGroup(" AND ", func(q *bun.SelectQuery) *bun.SelectQuery {
-			return q.Where(s.like("t.path"), pattern).WhereOr(s.like("t.description"), pattern)
+			return q.Where(s.like("t.path"), pattern).WhereOr(s.like("t.description"), pattern).
+				WhereOr("t.id IN (SELECT a.template_id FROM template_aliases AS a WHERE "+s.like("a.alias")+")", pattern)
 		})
 	}
 	return rows, q.Scan(ctx, &rows)
@@ -254,9 +256,12 @@ func (s *Store) UpdateTemplate(ctx context.Context, t *Template) error {
 	return s.Sync(ctx)
 }
 
-// DeleteTemplate removes a template and all its versions.
+// DeleteTemplate removes a template, all its versions and its former names.
 func (s *Store) DeleteTemplate(ctx context.Context, id int64) error {
 	err := s.DB.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+		if _, err := tx.NewDelete().Model((*TemplateAlias)(nil)).Where("template_id = ?", id).Exec(ctx); err != nil {
+			return err
+		}
 		if _, err := tx.NewDelete().Model((*TemplateVersion)(nil)).Where("template_id = ?", id).Exec(ctx); err != nil {
 			return err
 		}

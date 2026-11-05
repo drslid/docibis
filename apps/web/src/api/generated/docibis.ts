@@ -1069,6 +1069,21 @@ export interface TemplateDetail {
   /** Données attendues par la version publiée (ou la dernière) */
   fields: TemplateField[];
   sample?: TemplateDetailSample;
+  /** Anciens noms (renommé ou fusionné), qui trouvent toujours ce modèle */
+  aliases: string[];
+}
+
+export interface TemplateRename {
+  /**
+     * Nouveau chemin, avec son extension (.docx, .odt, .pdf, .typ)
+     * @maxLength 300
+     */
+  path: string;
+}
+
+export interface TemplateMerge {
+  /** Modèle à fusionner dans celui-ci, puis supprimé */
+  from: number;
 }
 
 export type TemplateContractKind = typeof TemplateContractKind[keyof typeof TemplateContractKind];
@@ -2028,6 +2043,13 @@ export type CheckAllTemplates202 = {
 
 export type PublishTemplateBody = {
   version: number;
+};
+
+export type DeleteTemplateAliasParams = {
+/**
+ * @maxLength 300
+ */
+name: string;
 };
 
 export type ExportAuditParams = {
@@ -7217,6 +7239,267 @@ export const usePublishTemplate = <TError = ErrorType<BadRequestResponse | Unaut
         TContext
       > => {
       return useMutation(getPublishTemplateMutationOptions(options), queryClient);
+    }
+
+export const getRenameTemplateUrl = (id: number,) => {
+
+
+
+
+  return `/api/templates/${id}/rename`
+}
+
+/**
+ * @summary Renomme un modèle ; l'ancien nom devient un ancien nom, qui le trouve toujours (éditeurs)
+ */
+export const renameTemplate = async (id: number,
+    templateRename: TemplateRename, options?: Parameters<typeof apiFetch>[1]): Promise<TemplateDetail> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return apiFetch<TemplateDetail>(getRenameTemplateUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(templateRename)
+  }
+);}
+
+
+
+
+
+export const getRenameTemplateMutationKey = () => ['renameTemplate'] as const;
+
+export const getRenameTemplateMutationOptions = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof renameTemplate>>, TError,RenameTemplateMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof renameTemplate>>, TError,RenameTemplateMutationVariables, TContext> => {
+
+const mutationKey = getRenameTemplateMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof renameTemplate>>, RenameTemplateMutationVariables> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  renameTemplate(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RenameTemplateMutationResult = NonNullable<Awaited<ReturnType<typeof renameTemplate>>>
+    export type RenameTemplateMutationBody = TemplateRename
+    export type RenameTemplateMutationError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse>
+    export type RenameTemplateMutationVariables = {id: number;data: TemplateRename}
+
+    /**
+ * @summary Renomme un modèle ; l'ancien nom devient un ancien nom, qui le trouve toujours (éditeurs)
+ */
+export const useRenameTemplate = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof renameTemplate>>, TError,RenameTemplateMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof renameTemplate>>,
+        TError,
+        RenameTemplateMutationVariables,
+        TContext
+      > => {
+      return useMutation(getRenameTemplateMutationOptions(options), queryClient);
+    }
+
+export const getMergeTemplateUrl = (id: number,) => {
+
+
+
+
+  return `/api/templates/${id}/merge`
+}
+
+/**
+ * @summary Fusionne un autre modèle dans celui-ci : ses versions dont le fichier manque s'ajoutent dans leur ordre, son chemin et ses anciens noms deviennent des anciens noms de celui-ci, puis il est supprimé ; la version publiée ne change pas (administrateurs)
+ */
+export const mergeTemplate = async (id: number,
+    templateMerge: TemplateMerge, options?: Parameters<typeof apiFetch>[1]): Promise<TemplateDetail> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return apiFetch<TemplateDetail>(getMergeTemplateUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(templateMerge)
+  }
+);}
+
+
+
+
+
+export const getMergeTemplateMutationKey = () => ['mergeTemplate'] as const;
+
+export const getMergeTemplateMutationOptions = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof mergeTemplate>>, TError,MergeTemplateMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof mergeTemplate>>, TError,MergeTemplateMutationVariables, TContext> => {
+
+const mutationKey = getMergeTemplateMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof mergeTemplate>>, MergeTemplateMutationVariables> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  mergeTemplate(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type MergeTemplateMutationResult = NonNullable<Awaited<ReturnType<typeof mergeTemplate>>>
+    export type MergeTemplateMutationBody = TemplateMerge
+    export type MergeTemplateMutationError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>
+    export type MergeTemplateMutationVariables = {id: number;data: TemplateMerge}
+
+    /**
+ * @summary Fusionne un autre modèle dans celui-ci : ses versions dont le fichier manque s'ajoutent dans leur ordre, son chemin et ses anciens noms deviennent des anciens noms de celui-ci, puis il est supprimé ; la version publiée ne change pas (administrateurs)
+ */
+export const useMergeTemplate = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof mergeTemplate>>, TError,MergeTemplateMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof mergeTemplate>>,
+        TError,
+        MergeTemplateMutationVariables,
+        TContext
+      > => {
+      return useMutation(getMergeTemplateMutationOptions(options), queryClient);
+    }
+
+export const getDeleteTemplateAliasUrl = (id: number,
+    params: DeleteTemplateAliasParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/templates/${id}/aliases?${stringifiedParams}` : `/api/templates/${id}/aliases`
+}
+
+/**
+ * @summary Retire un ancien nom ; les applications qui l'appellent encore reçoivent une erreur 404 (administrateurs)
+ */
+export const deleteTemplateAlias = async (id: number,
+    params: DeleteTemplateAliasParams, options?: Parameters<typeof apiFetch>[1]): Promise<void> => {
+
+  return apiFetch<void>(getDeleteTemplateAliasUrl(id,params),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDeleteTemplateAliasMutationKey = () => ['deleteTemplateAlias'] as const;
+
+export const getDeleteTemplateAliasMutationOptions = <TError = ErrorType<UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteTemplateAlias>>, TError,DeleteTemplateAliasMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteTemplateAlias>>, TError,DeleteTemplateAliasMutationVariables, TContext> => {
+
+const mutationKey = getDeleteTemplateAliasMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteTemplateAlias>>, DeleteTemplateAliasMutationVariables> = (props) => {
+          const {id,params} = props ?? {};
+
+          return  deleteTemplateAlias(id,params,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteTemplateAliasMutationResult = NonNullable<Awaited<ReturnType<typeof deleteTemplateAlias>>>
+
+    export type DeleteTemplateAliasMutationError = ErrorType<UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>
+    export type DeleteTemplateAliasMutationVariables = {id: number;params: DeleteTemplateAliasParams}
+
+    /**
+ * @summary Retire un ancien nom ; les applications qui l'appellent encore reçoivent une erreur 404 (administrateurs)
+ */
+export const useDeleteTemplateAlias = <TError = ErrorType<UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteTemplateAlias>>, TError,DeleteTemplateAliasMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof deleteTemplateAlias>>,
+        TError,
+        DeleteTemplateAliasMutationVariables,
+        TContext
+      > => {
+      return useMutation(getDeleteTemplateAliasMutationOptions(options), queryClient);
     }
 
 export const getDownloadTemplateVersionUrl = (id: number,

@@ -1303,6 +1303,85 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
+  /api/templates/{id}/rename:
+    parameters:
+      - {name: id, in: path, required: true, schema: {type: integer, format: int64}}
+    post:
+      operationId: renameTemplate
+      tags: [console]
+      summary: Renomme un modèle ; l'ancien nom devient un ancien nom, qui le trouve toujours (éditeurs)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TemplateRename"
+      responses:
+        "200":
+          description: Modèle renommé
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TemplateDetail"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /api/templates/{id}/merge:
+    parameters:
+      - {name: id, in: path, required: true, schema: {type: integer, format: int64}}
+    post:
+      operationId: mergeTemplate
+      tags: [console]
+      summary: >-
+        Fusionne un autre modèle dans celui-ci : ses versions dont le fichier manque s'ajoutent dans leur ordre,
+        son chemin et ses anciens noms deviennent des anciens noms de celui-ci, puis il est supprimé ; la
+        version publiée ne change pas (administrateurs)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TemplateMerge"
+      responses:
+        "200":
+          description: Modèles fusionnés
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TemplateDetail"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/templates/{id}/aliases:
+    parameters:
+      - {name: id, in: path, required: true, schema: {type: integer, format: int64}}
+    delete:
+      operationId: deleteTemplateAlias
+      tags: [console]
+      summary: Retire un ancien nom ; les applications qui l'appellent encore reçoivent une erreur 404 (administrateurs)
+      parameters:
+        - {name: name, in: query, required: true, schema: {type: string, maxLength: 300}}
+      responses:
+        "204":
+          description: Ancien nom retiré
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
   /api/templates/{id}/versions/{number}/file:
     parameters:
       - {name: id, in: path, required: true, schema: {type: integer, format: int64}}
@@ -3342,7 +3421,7 @@ components:
           type: boolean
     TemplateDetail:
       type: object
-      required: [template, versions, fields]
+      required: [template, versions, fields, aliases]
       properties:
         template:
           $ref: "#/components/schemas/LibraryTemplate"
@@ -3358,6 +3437,27 @@ components:
         sample:
           type: object
           additionalProperties: true
+        aliases:
+          description: Anciens noms (renommé ou fusionné), qui trouvent toujours ce modèle
+          type: array
+          items:
+            type: string
+    TemplateRename:
+      type: object
+      required: [path]
+      properties:
+        path:
+          description: Nouveau chemin, avec son extension (.docx, .odt, .pdf, .typ)
+          type: string
+          maxLength: 300
+    TemplateMerge:
+      type: object
+      required: [from]
+      properties:
+        from:
+          description: Modèle à fusionner dans celui-ci, puis supprimé
+          type: integer
+          format: int64
     TemplateContract:
       type: object
       required: [name, kind, version, fields]
