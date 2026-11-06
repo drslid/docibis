@@ -151,6 +151,12 @@ Un administrateur crée les comptes dans **Utilisateurs** avec un mot de passe p
 - **Journal d'audit** (administrateurs) trace les connexions et les changements.
 - **Monitoring** (administrateurs) montre l'état du service en direct.
 
+## Sauvegardes
+
+Chaque nuit (heure réglable, en UTC), DocIbis sauvegarde toute sa base (modèles et versions, comptes, clés API, réglages, historique) dans un fichier chiffré avec \`APP_SECRET_KEY\`, qu'il relit dans une base neuve pour vérifier qu'il se restaure. Les sauvegardes sont rangées à côté de la copie continue (\`STATE_URL\`), dans son bucket ou dans son dossier, et gardées 30 jours (réglable), les trois dernières toujours. **Configuration, [Sauvegardes](/configuration/backups)** les liste, en fait une tout de suite et les télécharge (administrateurs).
+
+Pour restaurer, DocIbis arrêté : \`docibis restore latest\`, ou le nom d'une sauvegarde, ou un jour (\`docibis restore 2026-11-06\`). L'état d'avant est sauvegardé d'abord, puis tout le monde se reconnecte. Une sauvegarde de SQLite se restaure dans PostgreSQL, et inversement. Gardez \`APP_SECRET_KEY\` : sans elle, aucune sauvegarde ne se relit.
+
 ## Brancher une application
 
 Voir [Utiliser l'API](/aide/api) et [Serveur MCP](/aide/mcp), ou la page **Intégrations**.

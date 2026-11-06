@@ -52,7 +52,7 @@ At completion, the terminal prints the address and a one-time setup code:
     Setup code: K7QM-2XV9
     Open the address, enter this code and create the first administrator.
     Folder: /opt/docibis (configuration in .env, fonts in fonts/)
-    Logs:   cd /opt/docibis && docker compose logs -f
+    Commands: sudo docibis status | logs | backup | restore | update | config
 ```
 
 Open the address, enter the code and create the administrator account. **Templates → Install the examples** adds sample templates and data to try the service.
@@ -159,16 +159,20 @@ cd /opt/docibis && docker compose restart api
 
 ## Operations
 
+The installer adds the `docibis` command on the server:
+
 ```bash
-cd /opt/docibis
-docker compose ps                  # state of the containers
-docker compose logs -f api         # logs
-docker compose down                # stop; data is kept in Docker volumes
+sudo docibis status                # containers, version, health, database, latest backups
+sudo docibis logs -f api           # logs
+sudo docibis backup                # back up the database now; docibis backups lists them
+sudo docibis restore latest        # or a backup name, or a day such as 2026-11-06
+sudo docibis update                # back up, install the latest release, check it, roll back by itself on failure
+sudo docibis config                # edit .env, then apply it
+sudo docibis db move postgres://…  # copy the database to PostgreSQL and switch to it
 ```
 
-- **Update:** run the installer again with the new tag. `.env` and the data are kept.
-- **Backup:** with SQLite, copy the `docibis_data` volume or use `STATE_URL`; with PostgreSQL, use `pg_dump`. Keep `APP_SECRET_KEY` with the backup: it seals the second-factor secrets.
-- **Uninstall:** `docker compose down -v` removes the containers **and the data**, then delete `/opt/docibis`.
+- **Backups:** every night (hour and retention in **Configuration → Backups**), the whole database goes into one file encrypted with `APP_SECRET_KEY`, read back into a new database to check that it restores, and kept in the data volume, or in the bucket of `STATE_URL`. A SQLite backup restores into PostgreSQL, and the other way round. Keep a copy of `.env` elsewhere: without `APP_SECRET_KEY`, no backup can be read.
+- **Uninstall:** `docker compose down -v` removes the containers **and the data**, then delete `/opt/docibis` and `/usr/local/bin/docibis`.
 - **Settings:** limits, retention, e-mail, security and branding are set in the console, under **Configuration**.
 
 ### Kubernetes
@@ -233,6 +237,7 @@ apps/web        React console and Caddy configuration
 apps/docs       Documentation site (Astro Starlight), published on GitHub Pages
 compose.yaml    Docker Compose stack used by install.sh
 deploy/helm     Helm chart for Kubernetes
+docibis         Server command installed by install.sh (status, backup, restore, update…)
 integrations    n8n node
 install.sh      One-line installer
 ```

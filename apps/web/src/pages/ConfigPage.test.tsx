@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import { describe, expect, it, vi } from 'vitest'
-import type { FontsOverview, SettingsPage } from '@/api/generated/docibis'
+import type { Backups, FontsOverview, SettingsPage } from '@/api/generated/docibis'
 import { ConfigPage } from './ConfigPage'
 
 const page: SettingsPage = {
@@ -135,5 +135,54 @@ describe('ConfigPage', () => {
     expect(screen.getByText('3 / 500')).toBeInTheDocument()
     const post = fetch.mock.calls.find(([url, init]) => url === '/api/spaces' && init?.method === 'POST')
     expect(JSON.parse(String(post?.[1]?.body))).toEqual({ name: 'Habitation', prefixes: ['habitation/', 'clauses'], dailyQuota: 500, monthlyQuota: 0 })
+  })
+
+  it('lists the backups under their settings and starts one', async () => {
+    const withBackups: SettingsPage = {
+      ...page,
+      groups: [
+        ...page.groups,
+        { id: 'backups', label: 'Sauvegardes', settings: [{ key: 'backup_hour', label: 'Heure de la sauvegarde (UTC)', kind: 'number', value: '1', default: '1', min: 0, max: 23, source: 'default', locked: false, active: true, restart: false }] },
+      ],
+    }
+    const backups: Backups = {
+      location: 's3://docibis-int/backups/',
+      enabled: true,
+      hour: 1,
+      retentionDays: 30,
+      keyMissing: false,
+      running: false,
+      backups: [
+        { name: 'docibis-20261106-010000-nightly.backup', kind: 'nightly', createdAt: '2026-11-06T01:00:00Z', size: 3145728, version: 'a1b2c3d4', engine: 'postgres', schema: 15, rows: { users: 3, templates: 72 }, verified: true },
+        { name: 'docibis-20261105-010000-nightly.backup', kind: 'nightly', createdAt: '2026-11-05T01:00:00Z', size: 3145728, verified: false, problem: 'rows differ' },
+      ],
+    }
+    const fetch = vi.fn(async (url: string, init?: RequestInit) => {
+      let body: unknown = withBackups
+      if (url === '/api/backups') body = init?.method === 'POST' ? { ...backups, running: true } : backups
+      if (url.includes('/api/info')) body = { name: 'DocIbis', version: 'dev', instance: 'INT', database: { engine: 'sqlite', replication: { enabled: false, locked: false } } }
+      return new Response(JSON.stringify(body), { status: init?.method === 'POST' ? 202 : 200, headers: { 'Content-Type': 'application/json' } })
+    })
+    vi.stubGlobal('fetch', fetch)
+    render(
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <MemoryRouter initialEntries={['/configuration/backups']}>
+          <Routes>
+            <Route path="/configuration/:section?" element={<ConfigPage />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    )
+    expect(await screen.findByText('docibis-20261106-010000-nightly.backup')).toBeInTheDocument()
+    expect(screen.getByLabelText('Heure de la sauvegarde (UTC)')).toHaveValue(1)
+    expect(screen.getByText('Relue')).toBeInTheDocument()
+    expect(screen.getByText('Non relue')).toBeInTheDocument()
+    expect(screen.getByText(/75 lignes/)).toBeInTheDocument()
+    expect(screen.getByLabelText('Télécharger docibis-20261106-010000-nightly.backup')).toHaveAttribute('href', '/api/backups/docibis-20261106-010000-nightly.backup')
+    expect(screen.getByText('docibis restore docibis-20261106-010000-nightly.backup')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /Sauvegarder maintenant/ }))
+    expect(await screen.findByText('Sauvegarde en cours…')).toBeInTheDocument()
+    expect(fetch.mock.calls.some(([url, init]) => url === '/api/backups' && init?.method === 'POST')).toBe(true)
   })
 })

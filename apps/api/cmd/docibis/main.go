@@ -2,6 +2,9 @@
 //
 //	docibis serve              start the service (default)
 //	docibis healthcheck [ready] check a running service (for Docker)
+//	docibis backup             back up the database now
+//	docibis backups            list the backups
+//	docibis restore NAME       replace the database with a backup (service stopped)
 //	docibis bench files...     measure conversions with warm workers
 //	docibis sample template.odt  example data for a template
 //	docibis merge …            fill a template with JSON data
@@ -24,6 +27,7 @@ import (
 	"syscall"
 	"time"
 
+	"docibis/internal/backup"
 	"docibis/internal/config"
 	"docibis/internal/httpapi"
 	"docibis/internal/render"
@@ -42,6 +46,12 @@ func main() {
 		os.Exit(serve())
 	case "healthcheck":
 		os.Exit(healthcheck(len(os.Args) > 2 && os.Args[2] == "ready"))
+	case "backup":
+		os.Exit(backupCmd(os.Args[2:]))
+	case "backups":
+		os.Exit(backupsCmd(os.Args[2:]))
+	case "restore":
+		os.Exit(restoreCmd(os.Args[2:]))
 	case "bench":
 		os.Exit(bench(os.Args[2:]))
 	case "sample":
@@ -53,7 +63,7 @@ func main() {
 	case "version":
 		fmt.Println(version.Version)
 	default:
-		fmt.Fprintln(os.Stderr, "usage: docibis [serve | healthcheck [ready] | bench | sample | merge | analyze | version]")
+		fmt.Fprintln(os.Stderr, "usage: docibis [serve | healthcheck [ready] | backup | backups | restore NAME | bench | sample | merge | analyze | version]")
 		os.Exit(2)
 	}
 }
@@ -71,6 +81,18 @@ func serve() int {
 	}
 	logger = slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: level}))
 	slog.SetDefault(logger)
+
+	// Two services on one SQLite file would damage it; a restore holds it too.
+	release, err := lockData(cfg.DataDir)
+	switch {
+	case errors.Is(err, errDataLocked):
+		logger.Error("another DocIbis process uses the data directory (a restore?): not starting", "data_dir", cfg.DataDir)
+		return 1
+	case err != nil:
+		logger.Warn("data directory not locked", "error", err)
+	default:
+		defer release()
+	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, os.Interrupt)
 	defer stop()
@@ -152,6 +174,15 @@ func serve() int {
 	}
 	api.SetStore(st, cfgs, setup)
 	logger.Info("DocIbis ready", "database", st.Engine(), "replication", st.Replication())
+	if loc, err := backup.LocationFor(ctx, cfg.StateURL, cfg.DataDir); err != nil {
+		logger.Error("no backups: their location cannot be used", "error", err)
+	} else {
+		api.SetBackups(loc, cfg.DataDir)
+		if backup.Secret() == nil {
+			logger.Warn("no backups: APP_SECRET_KEY (32 characters at least) encrypts them")
+		}
+		go api.WatchBackups(ctx)
+	}
 	// The fonts added are installed before the workers start.
 	if _, err := api.SyncFonts(ctx); err != nil {
 		logger.Error("fonts added not installed: documents use other fonts", "error", err)

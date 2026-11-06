@@ -108,22 +108,30 @@ func openPostgres(ctx context.Context, url string) (*Store, error) {
 }
 
 func (s *Store) migrate(ctx context.Context) error {
+	p, err := s.provider()
+	if err != nil {
+		return err
+	}
+	if _, err := p.Up(ctx); err != nil {
+		return fmt.Errorf("apply migrations: %w", err)
+	}
+	return nil
+}
+
+func (s *Store) provider() (*goose.Provider, error) {
 	dir, dialect := "sqlite", goose.DialectSQLite3
 	if s.engine == Postgres {
 		dir, dialect = "postgres", goose.DialectPostgres
 	}
 	fsys, err := fs.Sub(migrations.FS, dir)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	p, err := goose.NewProvider(dialect, s.DB.DB, fsys)
 	if err != nil {
-		return fmt.Errorf("migrations: %w", err)
+		return nil, fmt.Errorf("migrations: %w", err)
 	}
-	if _, err := p.Up(ctx); err != nil {
-		return fmt.Errorf("apply migrations: %w", err)
-	}
-	return nil
+	return p, nil
 }
 
 // Engine is the database engine.
@@ -197,4 +205,20 @@ func (s *Store) SetSetting(ctx context.Context, key, value string) error {
 		return err
 	}
 	return s.Sync(ctx)
+}
+
+// ClaimDay records under key that a daily job runs on day (2026-11-06): false
+// when another task already did, so that only one task runs it.
+func (s *Store) ClaimDay(ctx context.Context, key, day string) (bool, error) {
+	res, err := s.DB.ExecContext(ctx, `INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ?)
+		ON CONFLICT (key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at
+		WHERE settings.value < excluded.value`, key, day, time.Now().UTC())
+	if err != nil {
+		return false, err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return false, err
+	}
+	return n == 1, s.Sync(ctx)
 }

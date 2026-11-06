@@ -74,6 +74,13 @@ fi
 rm -rf "$DIR/apps"
 cp -R "$work/apps" "$work/compose.yaml" "$DIR/"
 mkdir -p "$DIR/fonts"
+# The docibis command, renamed into place: a running copy (docibis update) keeps reading the old one.
+if [[ -f $work/docibis ]]; then
+  cmd=$(mktemp /usr/local/bin/.docibis.XXXXXX)
+  sed "s|^DIR=\${DOCIBIS_DIR:-/opt/docibis}|DIR=\${DOCIBIS_DIR:-$DIR}|" "$work/docibis" >"$cmd"
+  chmod 0755 "$cmd"
+  mv "$cmd" /usr/local/bin/docibis
+fi
 cd "$DIR"
 
 # 4. The configuration, written once and kept by later runs.
@@ -169,4 +176,4 @@ if grep -q '"setupRequired":true' "$work/session.json"; then
   echo "    Open the address, enter this code and create the first administrator."
 fi
 echo "    Folder: $DIR (configuration in .env, fonts in fonts/)"
-echo "    Logs:   cd $DIR && docker compose logs -f"
+echo "    Commands: sudo docibis status | logs | backup | restore | update | config"

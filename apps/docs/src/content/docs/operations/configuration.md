@@ -55,12 +55,12 @@ Everything else is set in the console, under **Configuration**: limits, retentio
 
 | Variable                | Role                                                                 |
 | ----------------------- | -------------------------------------------------------------------- |
-| `APP_SECRET_KEY`        | seals the second-factor secrets; generated, keep it with the backups |
+| `APP_SECRET_KEY`        | encrypts the backups and seals the second-factor secrets; generated, keep a copy elsewhere |
 | `INSTANCE_NAME`         | name shown in the console, for example `PROD` or `TEST`              |
 | `DOCIBIS_VERSION`       | image tag: a release such as `v0.1.0`, or `edge`                      |
 | `DOCIBIS_PORT`          | HTTP port, `8080` by default                                         |
 | `DOCIBIS_DOMAIN`        | domain name for HTTPS                                                |
 | `DATABASE_URL`          | empty for SQLite, or a `postgres://` address                         |
-| `STATE_URL`             | optional copy of the SQLite database to S3, R2 or MinIO              |
+| `STATE_URL`             | optional copy of the SQLite database, and the backups, in S3, R2 or MinIO |
 | `SMTP_PASSWORD`         | password of the mail server set in the console                       |
 | `METRICS_TOKEN`         | token required to read `/metrics`                                    |

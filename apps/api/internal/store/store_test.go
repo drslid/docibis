@@ -115,6 +115,28 @@ func TestPostgres(t *testing.T) {
 	checkAliases(t, s)
 	checkSpaces(t, s)
 	checkRenderJobs(t, s)
+	checkBackups(t, pgStore(t, admin, base), pgStore(t, admin, base))
+}
+
+// pgStore opens a store in a new schema, dropped at the end of the test.
+func pgStore(t *testing.T, admin *sql.DB, base string) *Store {
+	t.Helper()
+	ctx := context.Background()
+	schema := fmt.Sprintf("t_%d", time.Now().UnixNano())
+	if _, err := admin.ExecContext(ctx, "CREATE SCHEMA "+schema); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { admin.ExecContext(ctx, "DROP SCHEMA "+schema+" CASCADE") })
+	sep := "?"
+	if strings.Contains(base, "?") {
+		sep = "&"
+	}
+	s, err := Open(ctx, Options{URL: base + sep + "search_path=" + schema}, quiet)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { s.Close(ctx) })
+	return s
 }
 
 // fakeLease is one lock object shared by several fakeLeasers, like lock.json on S3.

@@ -1191,6 +1191,67 @@ export interface FontsOverview {
   missing: MissingFont[];
 }
 
+/**
+ * nightly : de la nuit ; manual : à la demande ; update : avant une mise à jour ; restore : état de la base juste avant une restauration
+ */
+export type BackupKind = typeof BackupKind[keyof typeof BackupKind];
+
+
+export const BackupKind = {
+  nightly: 'nightly',
+  manual: 'manual',
+  update: 'update',
+  restore: 'restore',
+} as const;
+
+export type BackupEngine = typeof BackupEngine[keyof typeof BackupEngine];
+
+
+export const BackupEngine = {
+  sqlite: 'sqlite',
+  postgres: 'postgres',
+} as const;
+
+/**
+ * Lignes par table
+ */
+export type BackupRows = {[key: string]: number};
+
+export interface Backup {
+  name: string;
+  /** nightly : de la nuit ; manual : à la demande ; update : avant une mise à jour ; restore : état de la base juste avant une restauration */
+  kind: BackupKind;
+  createdAt: string;
+  size: number;
+  /** Version de DocIbis qui l'a faite */
+  version?: string;
+  engine?: BackupEngine;
+  /** Dernière migration de la base sauvegardée */
+  schema?: number;
+  /** Lignes par table */
+  rows?: BackupRows;
+  /** Relue dans une base neuve, toutes les lignes retrouvées */
+  verified: boolean;
+  problem?: string;
+}
+
+export interface Backups {
+  /** Où elles sont rangées (dossier, ou bucket et préfixe) ; vide si les sauvegardes ne sont pas prêtes */
+  location: string;
+  /** Sauvegarde chaque nuit */
+  enabled: boolean;
+  /** Heure de la sauvegarde de la nuit (UTC) */
+  hour: number;
+  retentionDays: number;
+  /** APP_SECRET_KEY manque, aucune sauvegarde n'est possible */
+  keyMissing: boolean;
+  /** Une sauvegarde est en cours sur ce serveur */
+  running: boolean;
+  /** Échec de la dernière sauvegarde faite par ce serveur, ou de la lecture de la liste */
+  lastError?: string;
+  backups: Backup[];
+}
+
 export type TemplateUpdateDataCheck = typeof TemplateUpdateDataCheck[keyof typeof TemplateUpdateDataCheck];
 
 
@@ -6739,6 +6800,283 @@ export const useDeleteFont = <TError = ErrorType<UnauthorizedResponse | Forbidde
       > => {
       return useMutation(getDeleteFontMutationOptions(options), queryClient);
     }
+
+export const getListBackupsUrl = () => {
+
+
+
+
+  return `/api/backups`
+}
+
+/**
+ * @summary Sauvegardes de la base, la plus récente d'abord (administrateurs)
+ */
+export const listBackups = async ( options?: Parameters<typeof apiFetch>[1]): Promise<Backups> => {
+
+  return apiFetch<Backups>(getListBackupsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListBackupsQueryKey = () => {
+    return [
+    `/api/backups`
+    ] as const;
+    }
+
+
+export const getListBackupsQueryOptions = <TData = Awaited<ReturnType<typeof listBackups>>, TError = ErrorType<UnauthorizedResponse | ForbiddenResponse>>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listBackups>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListBackupsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listBackups>>> = ({ signal }) => listBackups({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listBackups>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type ListBackupsQueryResult = NonNullable<Awaited<ReturnType<typeof listBackups>>>
+export type ListBackupsQueryError = ErrorType<UnauthorizedResponse | ForbiddenResponse>
+
+
+export function useListBackups<TData = Awaited<ReturnType<typeof listBackups>>, TError = ErrorType<UnauthorizedResponse | ForbiddenResponse>>(
+  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listBackups>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listBackups>>,
+          TError,
+          Awaited<ReturnType<typeof listBackups>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListBackups<TData = Awaited<ReturnType<typeof listBackups>>, TError = ErrorType<UnauthorizedResponse | ForbiddenResponse>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listBackups>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listBackups>>,
+          TError,
+          Awaited<ReturnType<typeof listBackups>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListBackups<TData = Awaited<ReturnType<typeof listBackups>>, TError = ErrorType<UnauthorizedResponse | ForbiddenResponse>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listBackups>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Sauvegardes de la base, la plus récente d'abord (administrateurs)
+ */
+
+export function useListBackups<TData = Awaited<ReturnType<typeof listBackups>>, TError = ErrorType<UnauthorizedResponse | ForbiddenResponse>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listBackups>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getListBackupsQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreateBackupUrl = () => {
+
+
+
+
+  return `/api/backups`
+}
+
+/**
+ * La sauvegarde se fait en arrière-plan ; GET /api/backups la montre une fois rangée.
+ * @summary Lance une sauvegarde tout de suite (administrateurs)
+ */
+export const createBackup = async ( options?: Parameters<typeof apiFetch>[1]): Promise<Backups> => {
+
+  return apiFetch<Backups>(getCreateBackupUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getCreateBackupMutationKey = () => ['createBackup'] as const;
+
+export const getCreateBackupMutationOptions = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createBackup>>, TError,void, TContext>, request?: SecondParameter<typeof apiFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createBackup>>, TError,void, TContext> => {
+
+const mutationKey = getCreateBackupMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createBackup>>, void> = () => {
+
+
+          return  createBackup(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateBackupMutationResult = NonNullable<Awaited<ReturnType<typeof createBackup>>>
+
+    export type CreateBackupMutationError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse>
+
+
+    /**
+ * @summary Lance une sauvegarde tout de suite (administrateurs)
+ */
+export const useCreateBackup = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createBackup>>, TError,void, TContext>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof createBackup>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getCreateBackupMutationOptions(options), queryClient);
+    }
+
+export const getDownloadBackupUrl = (name: string,) => {
+
+
+
+
+  return `/api/backups/${name}`
+}
+
+/**
+ * @summary Fichier d'une sauvegarde, chiffré avec APP_SECRET_KEY (administrateurs)
+ */
+export const downloadBackup = async (name: string, options?: Parameters<typeof apiFetch>[1]): Promise<Blob> => {
+
+  return apiFetch<Blob>(getDownloadBackupUrl(name),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getDownloadBackupQueryKey = (name: string,) => {
+    return [
+    `/api/backups/${name}`
+    ] as const;
+    }
+
+
+export const getDownloadBackupQueryOptions = <TData = Awaited<ReturnType<typeof downloadBackup>>, TError = ErrorType<UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>>(name: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof downloadBackup>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getDownloadBackupQueryKey(name);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof downloadBackup>>> = ({ signal }) => downloadBackup(name, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: name !== null && name !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof downloadBackup>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type DownloadBackupQueryResult = NonNullable<Awaited<ReturnType<typeof downloadBackup>>>
+export type DownloadBackupQueryError = ErrorType<UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>
+
+
+export function useDownloadBackup<TData = Awaited<ReturnType<typeof downloadBackup>>, TError = ErrorType<UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>>(
+ name: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof downloadBackup>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof downloadBackup>>,
+          TError,
+          Awaited<ReturnType<typeof downloadBackup>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useDownloadBackup<TData = Awaited<ReturnType<typeof downloadBackup>>, TError = ErrorType<UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>>(
+ name: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof downloadBackup>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof downloadBackup>>,
+          TError,
+          Awaited<ReturnType<typeof downloadBackup>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useDownloadBackup<TData = Awaited<ReturnType<typeof downloadBackup>>, TError = ErrorType<UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>>(
+ name: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof downloadBackup>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Fichier d'une sauvegarde, chiffré avec APP_SECRET_KEY (administrateurs)
+ */
+
+export function useDownloadBackup<TData = Awaited<ReturnType<typeof downloadBackup>>, TError = ErrorType<UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>>(
+ name: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof downloadBackup>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getDownloadBackupQueryOptions(name,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getGetDashboardUrl = () => {
 

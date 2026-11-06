@@ -57,6 +57,7 @@ var Groups = []Group{
 	{"async", "Rendu asynchrone"},
 	{"storage", "Stockage des fichiers"},
 	{"history", "Historique"},
+	{"backups", "Sauvegardes"},
 	{"security", "Sécurité"},
 	{"logs", "Journaux"},
 	{"mail", "E-mails des alertes"},
@@ -104,6 +105,10 @@ var Defs = []Def{
 	{Key: "history_retention_days", Group: "history", Label: "Conservation de l'historique (jours)", Help: "Les documents produits (date, modèle, auteur, durée) sont oubliés passé ce délai.", Kind: Number, Default: "90", Min: 1, Max: 3650, Active: true},
 	{Key: "keep_render_data", Group: "history", Label: "Garder les données pour produire à nouveau", Help: "Les données JSON et le modèle de chaque document sont gardés, compressés, pendant la durée ci-dessous : la page Documents produits peut alors produire à nouveau le document. Ces données sont souvent personnelles (clients). Désactivé : seules les informations du rendu sont gardées. Le document lui-même n'est jamais gardé.", Kind: Toggle, Default: "true", Active: true},
 	{Key: "render_data_days", Group: "history", Label: "Conservation des données des documents (jours)", Help: "Passé ce délai, les données JSON d'un document sont effacées ; ses informations restent dans l'historique. 180 jours (6 mois) au plus.", Kind: Number, Default: "90", Min: 1, Max: 180, Active: true},
+
+	{Key: "backup_enabled", Group: "backups", Label: "Sauvegarder chaque nuit", Help: "Toute la base (modèles et versions, comptes, clés, réglages, historique), chiffrée avec APP_SECRET_KEY, relue dans une base neuve pour la vérifier, puis rangée à côté de la copie continue (STATE_URL) : dans son bucket, ou dans son dossier.", Kind: Toggle, Default: "true", Active: true},
+	{Key: "backup_hour", Group: "backups", Label: "Heure de la sauvegarde (UTC)", Help: "De 0 à 23. Une instance arrêtée à cette heure se sauvegarde dès qu'elle repart, le même jour.", Kind: Number, Default: "1", Min: 0, Max: 23, Active: true},
+	{Key: "backup_retention_days", Group: "backups", Label: "Conservation des sauvegardes (jours)", Help: "Les sauvegardes plus anciennes sont effacées ; les trois plus récentes restent toujours.", Kind: Number, Default: "30", Min: 1, Max: 365, Active: true},
 
 	{Key: "session_hours", Group: "security", Label: "Durée d'une session (heures)", Kind: Number, Default: "12", Min: 1, Max: 168, Active: true},
 	{Key: "session_idle_minutes", Group: "security", Label: "Déconnexion après inactivité (minutes)", Help: "Une session restée sans usage pendant ce délai est fermée. 0 : seule la durée de la session compte.", Kind: Number, Default: "120", Min: 0, Max: 1440, Active: true},

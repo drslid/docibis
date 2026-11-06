@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { Navigate, NavLink, useParams } from 'react-router'
 import { useQueryClient } from '@tanstack/react-query'
 import {
+  Archive,
   Boxes,
   Cpu,
   DatabaseBackup,
@@ -44,6 +45,7 @@ import {
 import { LoadingSpinner } from '@/components/common/LoadingSpinner'
 import { CopyButton } from '@/components/common/CopyButton'
 import { SettingsCard } from '@/components/common/SettingsCard'
+import { BackupsSection } from '@/components/config/BackupsSection'
 import { FontsSection } from '@/components/config/FontsSection'
 import { SpacesSection } from '@/components/config/SpacesSection'
 import { BrandLogo, companyLogoURL } from '@/components/layout/BrandLogo'
@@ -67,6 +69,7 @@ const GROUPS: Record<string, { icon: LucideIcon; colour: string }> = {
   async: { icon: Webhook, colour: 'text-fuchsia-500' },
   storage: { icon: DatabaseBackup, colour: 'text-teal-500' },
   history: { icon: History, colour: 'text-violet-500' },
+  backups: { icon: Archive, colour: 'text-amber-600' },
   security: { icon: ShieldCheck, colour: 'text-rose-500' },
   logs: { icon: ScrollText, colour: 'text-slate-500' },
 }
@@ -358,6 +361,8 @@ export function ConfigPage() {
               </div>
             </SettingsCard>
           )}
+
+          {active.id === 'backups' && <BackupsSection />}
 
           {active.id === 'apparence' && <BrandingSection />}
 

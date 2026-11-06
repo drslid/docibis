@@ -137,6 +137,20 @@ func prepareLocalState(ctx context.Context, ls *litestream.DB, label string, fre
 }
 
 func newS3Leaser(ctx context.Context, sc *lss3.ReplicaClient, logger *slog.Logger) (litestream.Leaser, error) {
+	client, err := S3Client(ctx, sc)
+	if err != nil {
+		return nil, err
+	}
+	l := lss3.NewLeaser()
+	l.Bucket, l.Path = sc.Bucket, sc.Path
+	l.SetClient(client)
+	l.SetLogger(logger)
+	return l, nil
+}
+
+// S3Client reaches the bucket of a copy with the credentials of the
+// environment (the task role on AWS).
+func S3Client(ctx context.Context, sc *lss3.ReplicaClient) (*s3.Client, error) {
 	region := sc.Region
 	if region == "" {
 		region = os.Getenv("AWS_REGION")
@@ -149,17 +163,12 @@ func newS3Leaser(ctx context.Context, sc *lss3.ReplicaClient, logger *slog.Logge
 	if err != nil {
 		return nil, err
 	}
-	client := s3.NewFromConfig(cfg, func(o *s3.Options) {
+	return s3.NewFromConfig(cfg, func(o *s3.Options) {
 		if sc.Endpoint != "" {
 			o.BaseEndpoint = aws.String(sc.Endpoint)
 			o.UsePathStyle = true
 		}
-	})
-	l := lss3.NewLeaser()
-	l.Bucket, l.Path = sc.Bucket, sc.Path
-	l.SetClient(client)
-	l.SetLogger(logger)
-	return l, nil
+	}), nil
 }
 
 // leaseWait bounds the wait for a lease left by a task that stopped without

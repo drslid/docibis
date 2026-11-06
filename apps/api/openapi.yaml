@@ -1185,6 +1185,65 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
+  /api/backups:
+    get:
+      operationId: listBackups
+      tags: [console]
+      summary: Sauvegardes de la base, la plus récente d'abord (administrateurs)
+      responses:
+        "200":
+          description: Les sauvegardes et leur réglage
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Backups"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    post:
+      operationId: createBackup
+      tags: [console]
+      summary: Lance une sauvegarde tout de suite (administrateurs)
+      description: La sauvegarde se fait en arrière-plan ; GET /api/backups la montre une fois rangée.
+      responses:
+        "202":
+          description: Sauvegarde lancée
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Backups"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /api/backups/{name}:
+    parameters:
+      - {name: name, in: path, required: true, schema: {type: string, maxLength: 100}}
+    get:
+      operationId: downloadBackup
+      tags: [console]
+      summary: Fichier d'une sauvegarde, chiffré avec APP_SECRET_KEY (administrateurs)
+      responses:
+        "200":
+          description: La sauvegarde
+          headers:
+            Content-Disposition:
+              schema:
+                type: string
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
   /api/dashboard:
     get:
       operationId: getDashboard
@@ -3826,6 +3885,71 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/MissingFont"
+    Backups:
+      type: object
+      required: [location, enabled, hour, retentionDays, keyMissing, running, backups]
+      properties:
+        location:
+          description: Où elles sont rangées (dossier, ou bucket et préfixe) ; vide si les sauvegardes ne sont pas prêtes
+          type: string
+        enabled:
+          description: Sauvegarde chaque nuit
+          type: boolean
+        hour:
+          description: Heure de la sauvegarde de la nuit (UTC)
+          type: integer
+        retentionDays:
+          type: integer
+        keyMissing:
+          description: APP_SECRET_KEY manque, aucune sauvegarde n'est possible
+          type: boolean
+        running:
+          description: Une sauvegarde est en cours sur ce serveur
+          type: boolean
+        lastError:
+          description: Échec de la dernière sauvegarde faite par ce serveur, ou de la lecture de la liste
+          type: string
+        backups:
+          type: array
+          items:
+            $ref: "#/components/schemas/Backup"
+    Backup:
+      type: object
+      required: [name, kind, createdAt, size, verified]
+      properties:
+        name:
+          type: string
+        kind:
+          description: "nightly : de la nuit ; manual : à la demande ; update : avant une mise à jour ; restore : état de la base juste avant une restauration"
+          type: string
+          enum: [nightly, manual, update, restore]
+        createdAt:
+          type: string
+          format: date-time
+        size:
+          type: integer
+          format: int64
+        version:
+          description: Version de DocIbis qui l'a faite
+          type: string
+        engine:
+          type: string
+          enum: [sqlite, postgres]
+        schema:
+          description: Dernière migration de la base sauvegardée
+          type: integer
+          format: int64
+        rows:
+          description: Lignes par table
+          type: object
+          additionalProperties:
+            type: integer
+            format: int64
+        verified:
+          description: Relue dans une base neuve, toutes les lignes retrouvées
+          type: boolean
+        problem:
+          type: string
     TemplateUpdate:
       type: object
       properties:

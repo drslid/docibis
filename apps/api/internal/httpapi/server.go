@@ -41,6 +41,7 @@ type Server struct {
 	system   systemSampler
 	overlays overlayCache
 	fonts    fontState
+	backups  backupState
 	// signing guards the making of the signing key.
 	signing sync.Mutex
 	// native runs the Typst copies (nil until its workers are warm).
@@ -116,6 +117,7 @@ func (s *Server) Handler() http.Handler {
 	e.GET(mcpPath, mcp)
 	e.DELETE(mcpPath, mcp)
 	e.GET("/metrics", s.serveMetrics)
+	e.POST(localBackupPath, s.serveLocalBackup)
 	return e
 }
 

@@ -36,7 +36,7 @@ Open the address and enter the code: you create the first administrator account,
 ![The first page of DocIbis: enter the setup code and create the administrator](../../../assets/screenshots/setup.png)
 
 :::tip
-Keep `/opt/docibis/.env`. Its `APP_SECRET_KEY` protects the second-factor secrets of the accounts: a backup without it cannot restore them.
+Keep a copy of `/opt/docibis/.env` elsewhere. Its `APP_SECRET_KEY` encrypts the backups and protects the second-factor secrets of the accounts: without it, no backup can be read.
 :::
 
 ## Install without questions

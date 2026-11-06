@@ -21,6 +21,7 @@ func requiredRole(method, path string) string {
 	switch {
 	case strings.HasPrefix(path, "/api/users"), strings.HasPrefix(path, "/api/keys"),
 		path == "/api/settings", strings.HasPrefix(path, "/api/audit"), strings.HasPrefix(path, "/api/monitoring"), strings.HasPrefix(path, "/api/metrics"),
+		strings.HasPrefix(path, "/api/backups"),
 		strings.HasPrefix(path, "/api/branding") && write,
 		strings.HasPrefix(path, "/api/fonts") && write,
 		strings.HasPrefix(path, "/api/spaces") && write,

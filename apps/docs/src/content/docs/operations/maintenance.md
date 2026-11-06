@@ -17,29 +17,48 @@ The **Audit log** records every change made in the console: who, what and when.
 
 ## Commands
 
+The installer adds the `docibis` command on the server:
+
 ```bash
-cd /opt/docibis
-docker compose ps             # state of the containers
-docker compose logs -f api    # logs
-docker compose restart api    # restart, for example after adding fonts
-docker compose down           # stop; the data is kept
+sudo docibis status            # containers, version, health, database, disk, latest backups
+sudo docibis logs -f api       # logs
+sudo docibis backup            # back up the database now
+sudo docibis backups           # list the backups
+sudo docibis restore latest    # replace the database with a backup
+sudo docibis update            # update to the latest release
+sudo docibis config            # edit .env, then apply it
+sudo docibis db move postgres://docibis:password@db.example.com:5432/docibis
 ```
+
+`docker compose` still works in `/opt/docibis`, for example `docker compose restart api` after adding fonts.
 
 ## Update
 
-Run the installer again with the new release. The configuration (`.env`) and the data are kept.
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/drslid/docibis/main/install.sh | sudo env DOCIBIS_REF=v0.2.0 bash
-```
+`sudo docibis update` backs up the database, installs the latest release (or the one given: `sudo docibis update v0.2.0`, or `main` for the latest build), then checks that the API answers. When the new version does not start, it goes back by itself to the previous version, with the data of the backup made just before, and writes the logs of the failure to `/opt/docibis/update-failed.log`.
 
 **What's new**, in the console, lists the changes of each version.
 
-## Back up
+## Back up and restore
 
-- **SQLite:** copy the `docibis_data` Docker volume, or set `STATE_URL` for a continuous copy to S3, R2 or MinIO.
-- **PostgreSQL:** use `pg_dump`.
-- In both cases, keep `/opt/docibis/.env` with the backup: its `APP_SECRET_KEY` is needed to read the second-factor secrets.
+Every night (**Configuration → Backups**: hour in UTC, 30 days kept, the three latest always), DocIbis backs up its whole database (templates and versions, accounts, API keys, settings, history) into one file encrypted with `APP_SECRET_KEY`, then reads it back into a new database to check that it restores. The same page lists the backups, makes one at once and downloads them.
+
+The backups are kept next to the continuous copy of the database: in the data volume (`/data/backups`), or in the bucket of `STATE_URL`. Set `STATE_URL` to keep them off the server.
+
+```bash
+sudo docibis restore latest    # or a name given by docibis backups, or a day: 2026-11-06
+```
+
+The API stops during the restore; the state before it is backed up first, and everyone signs in again. A SQLite backup restores into PostgreSQL, and the other way round.
+
+Keep a copy of `/opt/docibis/.env` elsewhere: without its `APP_SECRET_KEY`, no backup can be read, and the second-factor secrets cannot be opened.
+
+## Move to PostgreSQL
+
+```bash
+sudo docibis db move 'postgres://docibis:password@db.example.com:5432/docibis?sslmode=require'
+```
+
+DocIbis backs up its database, copies it into PostgreSQL (version 15 or later, an empty database of its own), then starts on it; if it does not start, it goes back to the previous database. The previous settings stay in `/opt/docibis/.env.before-move`, and the SQLite database in its volume.
 
 ## Remove
 
