@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { Navigate, NavLink, useParams } from 'react-router'
 import { useQueryClient } from '@tanstack/react-query'
 import {
+  Boxes,
   Cpu,
   DatabaseBackup,
   FileText,
@@ -44,6 +45,7 @@ import { LoadingSpinner } from '@/components/common/LoadingSpinner'
 import { CopyButton } from '@/components/common/CopyButton'
 import { SettingsCard } from '@/components/common/SettingsCard'
 import { FontsSection } from '@/components/config/FontsSection'
+import { SpacesSection } from '@/components/config/SpacesSection'
 import { BrandLogo, companyLogoURL } from '@/components/layout/BrandLogo'
 import { PageTitle } from '@/components/layout/PageTitle'
 import { useI18n, type Key } from '@/i18n/useI18n'
@@ -294,6 +296,7 @@ export function ConfigPage() {
     ...data.groups.map((g) => ({ id: g.id, label: g.label, ...(GROUPS[g.id] ?? { icon: SlidersHorizontal, colour: 'text-gray-500' }) })),
     { id: 'apparence', label: t('config.branding'), icon: Palette, colour: 'text-pink-500' },
     { id: 'polices', label: t('fonts.title'), icon: Type, colour: 'text-lime-600' },
+    { id: 'espaces', label: t('spaces.title'), icon: Boxes, colour: 'text-cyan-600' },
     { id: 'environnements', label: t('envs.title'), icon: Send, colour: 'text-fuchsia-500' },
     { id: 'demarrage', label: t('config.startup'), icon: Server, colour: 'text-slate-500' },
   ]
@@ -359,6 +362,8 @@ export function ConfigPage() {
           {active.id === 'apparence' && <BrandingSection />}
 
           {active.id === 'polices' && <FontsSection />}
+
+          {active.id === 'espaces' && <SpacesSection />}
 
           {active.id === 'environnements' && <EnvironmentsSection />}
 

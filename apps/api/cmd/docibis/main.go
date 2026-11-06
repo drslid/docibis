@@ -179,6 +179,9 @@ func serve() int {
 		if err := st.PurgeMCPCalls(ctx, before); err != nil {
 			logger.Warn("MCP journal purge failed", "error", err)
 		}
+		if err := st.PurgeUsage(ctx, time.Now().AddDate(-1, -1, 0)); err != nil {
+			logger.Warn("quota counts purge failed", "error", err)
+		}
 	}
 	purge()
 	hourly := time.NewTicker(time.Hour)

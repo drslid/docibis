@@ -3,6 +3,7 @@ package httpapi
 import (
 	"context"
 	"crypto/rand"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -68,6 +69,16 @@ func (s *Server) keyGuard(next echo.HandlerFunc) echo.HandlerFunc {
 			c.Response().Header().Set("Retry-After", strconv.Itoa(wait))
 			return echo.NewHTTPError(http.StatusTooManyRequests, msg)
 		}
+		if producesDocuments(r.Method, r.URL.Path) {
+			wait, msg, err := s.quotaWait(r.Context(), k)
+			if err != nil {
+				return err
+			}
+			if wait > 0 {
+				c.Response().Header().Set("Retry-After", strconv.Itoa(wait))
+				return echo.NewHTTPError(http.StatusTooManyRequests, msg)
+			}
+		}
 		c.SetRequest(r.WithContext(context.WithValue(r.Context(), keyKey, k)))
 		return next(c)
 	}
@@ -127,7 +138,7 @@ func apiKey(k store.APIKey) ApiKey {
 	out := ApiKey{
 		Id: k.ID, Name: k.Name, Prefix: k.Prefix, CreatedBy: k.CreatedBy, CreatedAt: k.CreatedAt,
 		ExpiresAt: k.ExpiresAt, LastUsedAt: k.LastUsedAt, RevokedAt: k.RevokedAt, Status: ApiKeyStatusActive,
-		RatePerMinute: &k.RatePerMinute,
+		RatePerMinute: &k.RatePerMinute, SpaceId: &k.SpaceID, DailyQuota: &k.DailyQuota, MonthlyQuota: &k.MonthlyQuota,
 	}
 	for _, scope := range strings.Split(k.Scopes, ",") {
 		out.Scopes = append(out.Scopes, ApiKeyScopes(scope))
@@ -146,11 +157,45 @@ func (s *Server) ListApiKeys(ctx context.Context, _ ListApiKeysRequestObject) (L
 	if err != nil {
 		return nil, err
 	}
+	scopes := make([]string, 0, len(keys))
+	for _, k := range keys {
+		scopes = append(scopes, keyScope(k.ID))
+	}
+	day, month, err := s.db.Load().Usage(ctx, time.Now(), scopes...)
+	if err != nil {
+		return nil, err
+	}
 	out := make(ListApiKeys200JSONResponse, 0, len(keys))
 	for _, k := range keys {
-		out = append(out, apiKey(k))
+		item := apiKey(k)
+		item.Usage = &Usage{Today: day[keyScope(k.ID)], Month: month[keyScope(k.ID)]}
+		out = append(out, item)
 	}
 	return out, nil
+}
+
+// keyLimits checks the space and the quotas given for a key.
+func (s *Server) keyLimits(ctx context.Context, k *store.APIKey, space *int64, daily, monthly *int) error {
+	if space != nil {
+		if *space != 0 {
+			if _, ok, err := s.db.Load().SpaceByID(ctx, *space); err != nil {
+				return err
+			} else if !ok {
+				return refuse("Espace inconnu.")
+			}
+		}
+		k.SpaceID = *space
+	}
+	if daily != nil {
+		k.DailyQuota = *daily
+	}
+	if monthly != nil {
+		k.MonthlyQuota = *monthly
+	}
+	if k.DailyQuota < 0 || k.DailyQuota > maxQuota || k.MonthlyQuota < 0 || k.MonthlyQuota > maxQuota {
+		return refuse("Quotas : de 0 (sans limite) à %d documents.", maxQuota)
+	}
+	return nil
 }
 
 func (s *Server) CreateApiKey(ctx context.Context, req CreateApiKeyRequestObject) (CreateApiKeyResponseObject, error) {
@@ -184,6 +229,13 @@ func (s *Server) CreateApiKey(ctx context.Context, req CreateApiKeyRequestObject
 		scopes += "," + string(Templates)
 	}
 	k := store.APIKey{Name: name, Prefix: prefix, Hash: hashToken(secret), Scopes: scopes, CreatedBy: u.Username, CreatedAt: now, ExpiresAt: &expires, RatePerMinute: rate}
+	if err := s.keyLimits(ctx, &k, req.Body.SpaceId, req.Body.DailyQuota, req.Body.MonthlyQuota); err != nil {
+		var te *tryError
+		if errors.As(err, &te) {
+			return CreateApiKey400ApplicationProblemPlusJSONResponse{badRequest(te.msg)}, nil
+		}
+		return nil, err
+	}
 	if err := s.db.Load().CreateAPIKey(ctx, &k); err != nil {
 		return nil, err
 	}
@@ -234,10 +286,17 @@ func (s *Server) UpdateApiKey(ctx context.Context, req UpdateApiKeyRequestObject
 			return UpdateApiKey400ApplicationProblemPlusJSONResponse{badRequest(rateMessage)}, nil
 		}
 	}
+	if err := s.keyLimits(ctx, &k, req.Body.SpaceId, req.Body.DailyQuota, req.Body.MonthlyQuota); err != nil {
+		var te *tryError
+		if errors.As(err, &te) {
+			return UpdateApiKey400ApplicationProblemPlusJSONResponse{badRequest(te.msg)}, nil
+		}
+		return nil, err
+	}
 	if err := st.UpdateAPIKey(ctx, &k); err != nil {
 		return nil, err
 	}
 	u, _ := userFrom(ctx)
-	s.audit(ctx, u.Username, "apikey.update", "key:"+k.Prefix, fmt.Sprintf("%s, %d appels par minute", k.Name, k.RatePerMinute))
+	s.audit(ctx, u.Username, "apikey.update", "key:"+k.Prefix, fmt.Sprintf("%s, %d appels par minute, espace %d, %d documents par jour, %d par mois", k.Name, k.RatePerMinute, k.SpaceID, k.DailyQuota, k.MonthlyQuota))
 	return UpdateApiKey200JSONResponse(apiKey(k)), nil
 }

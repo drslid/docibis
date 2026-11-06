@@ -1,17 +1,20 @@
-import { useState } from 'react'
+import { Fragment, useState } from 'react'
 import { Link } from 'react-router'
 import { useQueryClient } from '@tanstack/react-query'
-import { AlertTriangle, KeyRound, Pencil, Plus } from 'lucide-react'
+import { AlertTriangle, KeyRound, Pencil, Plus, Save, X } from 'lucide-react'
 import {
-  getListApiKeysQueryKey, useCreateApiKey, useListApiKeys, useRevokeApiKey, useUpdateApiKey, type ApiKey, type ApiKeyCreated,
+  getListApiKeysQueryKey, useCreateApiKey, useListApiKeys, useListSpaces, useRevokeApiKey, useUpdateApiKey, type ApiKey, type ApiKeyCreated,
 } from '@/api/generated/docibis'
 import { ApiError } from '@/api/fetcher'
 import { LoadingSpinner } from '@/components/common/LoadingSpinner'
 import { EmptyState } from '@/components/common/EmptyState'
+import { QuotaBar } from '@/components/config/SpacesSection'
 import { HelpTip } from '@/components/help/HelpTip'
 import { PageTitle } from '@/components/layout/PageTitle'
 import { useI18n, type Key } from '@/i18n/useI18n'
 import { CopyButton } from '@/components/common/CopyButton'
+
+const Row = Fragment
 
 const STATUS: Record<ApiKey['status'], { label: Key; colour: string }> = {
   active: { label: 'keys.status.active', colour: 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300' },
@@ -23,6 +26,35 @@ function message(error: unknown) {
   return error instanceof ApiError ? (error.problem?.detail ?? error.message) : String(error)
 }
 
+type Limits = { space: string; daily: string; monthly: string }
+const NO_LIMITS: Limits = { space: '0', daily: '0', monthly: '0' }
+const limitsBody = (l: Limits) => ({ spaceId: Number(l.space), dailyQuota: Number(l.daily) || 0, monthlyQuota: Number(l.monthly) || 0 })
+
+/** The space and the quotas of a key. */
+function LimitsFields({ value, onChange, id }: { value: Limits; onChange: (l: Limits) => void; id: string }) {
+  const { t } = useI18n()
+  const { data: spaces } = useListSpaces()
+  return (
+    <>
+      <div>
+        <label className="label" htmlFor={`${id}-space`}>{t('keys.space')}</label>
+        <select id={`${id}-space`} className="input" value={value.space} onChange={(e) => onChange({ ...value, space: e.target.value })}>
+          <option value="0">{t('spaces.whole')}</option>
+          {spaces?.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+        </select>
+      </div>
+      <div>
+        <label className="label" htmlFor={`${id}-daily`}>{t('spaces.daily')}</label>
+        <input id={`${id}-daily`} className="input" type="number" min={0} value={value.daily} onChange={(e) => onChange({ ...value, daily: e.target.value })} />
+      </div>
+      <div>
+        <label className="label" htmlFor={`${id}-monthly`}>{t('spaces.monthly')}</label>
+        <input id={`${id}-monthly`} className="input" type="number" min={0} value={value.monthly} onChange={(e) => onChange({ ...value, monthly: e.target.value })} />
+      </div>
+    </>
+  )
+}
+
 export function ApiKeysPage() {
   const { t, date: when } = useI18n()
   const queryClient = useQueryClient()
@@ -30,11 +62,15 @@ export function ApiKeysPage() {
   const [name, setName] = useState('')
   const [days, setDays] = useState('')
   const [receives, setReceives] = useState(false)
+  const [limits, setLimits] = useState<Limits>(NO_LIMITS)
+  const [editing, setEditing] = useState<{ id: number; limits: Limits }>()
   const [created, setCreated] = useState<ApiKeyCreated>()
+  const { data: spaces } = useListSpaces()
   const refresh = () => queryClient.invalidateQueries({ queryKey: getListApiKeysQueryKey() })
-  const create = useCreateApiKey({ mutation: { onSuccess: (r) => { setCreated(r); setName(''); refresh() } } })
+  const create = useCreateApiKey({ mutation: { onSuccess: (r) => { setCreated(r); setName(''); setLimits(NO_LIMITS); refresh() } } })
   const revoke = useRevokeApiKey({ mutation: { onSuccess: refresh } })
-  const update = useUpdateApiKey({ mutation: { onSuccess: refresh } })
+  const update = useUpdateApiKey({ mutation: { onSuccess: () => { setEditing(undefined); refresh() } } })
+  const spaceName = (id?: number) => (id ? (spaces?.find((s) => s.id === id)?.name ?? `#${id}`) : t('spaces.whole'))
 
   function changeRate(k: ApiKey) {
     const answer = window.prompt(t('keys.ratePrompt', { name: k.name }), String(k.ratePerMinute ?? 0))
@@ -52,7 +88,7 @@ export function ApiKeysPage() {
 
   function submit(e: React.FormEvent) {
     e.preventDefault()
-    create.mutate({ data: { name, ...(days ? { expiresInDays: Number(days) } : {}), ...(receives && { receivesTemplates: true }) } })
+    create.mutate({ data: { name, ...(days ? { expiresInDays: Number(days) } : {}), ...(receives && { receivesTemplates: true }), ...limitsBody(limits) } })
   }
 
   return (
@@ -77,6 +113,9 @@ export function ApiKeysPage() {
           <Plus className="w-4 h-4" /> {t('keys.create')}
         </button>
         {create.error && <p className="text-sm text-red-700 dark:text-red-400 md:col-span-3">{message(create.error)}</p>}
+        <div className="md:col-span-3 grid gap-4 sm:grid-cols-3">
+          <LimitsFields id="key" value={limits} onChange={setLimits} />
+        </div>
         <label className="flex items-center gap-2 text-sm md:col-span-3">
           <input type="checkbox" checked={receives} onChange={(e) => setReceives(e.target.checked)} /> {t('keys.receives')} <HelpTip>{t('keys.receivesHint')}</HelpTip>
         </label>
@@ -110,12 +149,13 @@ export function ApiKeysPage() {
               <thead className="text-left text-xs uppercase tracking-wider text-gray-400">
                 <tr>
                   <th className="py-2 pr-3">{t('keys.application')}</th><th className="py-2 pr-3">{t('keys.col.key')}</th><th className="py-2 pr-3">{t('keys.col.created')}</th>
-                  <th className="py-2 pr-3">{t('keys.col.used')}</th><th className="py-2 pr-3">{t('keys.col.expires')}</th><th className="py-2 pr-3">{t('keys.rate')}</th><th className="py-2 pr-3">{t('keys.col.status')}</th><th />
+                  <th className="py-2 pr-3">{t('keys.col.used')}</th><th className="py-2 pr-3">{t('keys.col.expires')}</th><th className="py-2 pr-3">{t('keys.rate')}</th><th className="py-2 pr-3 min-w-48">{t('keys.space')}</th><th className="py-2 pr-3">{t('keys.col.status')}</th><th />
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
                 {keys.map((k) => (
-                  <tr key={k.id}>
+                  <Row key={k.id}>
+                  <tr>
                     <td className="py-2 pr-3 font-medium">
                       {k.name}
                       {k.scopes.includes('templates') && <span className="ml-2 text-[11px] px-2 py-0.5 rounded-full bg-fuchsia-100 text-fuchsia-700 dark:bg-fuchsia-900/40 dark:text-fuchsia-300">{t('keys.receivesBadge')}</span>}
@@ -132,6 +172,26 @@ export function ApiKeysPage() {
                         </button>
                       )}
                     </td>
+                    <td className="py-2 pr-3">
+                      <div className="flex items-center gap-1 text-gray-700 dark:text-gray-200">
+                        {spaceName(k.spaceId)}
+                        {k.status === 'active' && (
+                          <button
+                            className="text-gray-400 hover:text-gray-700"
+                            aria-label={t('keys.editLimits', { name: k.name })}
+                            onClick={() => setEditing({ id: k.id, limits: { space: String(k.spaceId ?? 0), daily: String(k.dailyQuota ?? 0), monthly: String(k.monthlyQuota ?? 0) } })}
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+                      {k.usage && (
+                        <div className="mt-1 space-y-1">
+                          <QuotaBar used={k.usage.today} quota={k.dailyQuota ?? 0} label={t('spaces.today')} />
+                          <QuotaBar used={k.usage.month} quota={k.monthlyQuota ?? 0} label={t('spaces.month')} />
+                        </div>
+                      )}
+                    </td>
                     <td className="py-2 pr-3"><span className={`text-xs px-2 py-0.5 rounded-full ${STATUS[k.status].colour}`}>{t(STATUS[k.status].label)}</span></td>
                     <td className="py-2 text-right">
                       {k.status === 'active' && (
@@ -145,6 +205,23 @@ export function ApiKeysPage() {
                       )}
                     </td>
                   </tr>
+                  {editing?.id === k.id && (
+                    <tr>
+                      <td colSpan={9} className="pb-4">
+                        <form
+                          className="grid gap-3 sm:grid-cols-[1fr_1fr_1fr_auto] sm:items-end rounded-lg bg-gray-50 dark:bg-gray-900/40 p-3"
+                          onSubmit={(e) => { e.preventDefault(); update.mutate({ id: k.id, data: limitsBody(editing.limits) }) }}
+                        >
+                          <LimitsFields id={`edit-${k.id}`} value={editing.limits} onChange={(l) => setEditing({ id: k.id, limits: l })} />
+                          <div className="flex gap-2">
+                            <button type="button" className="btn-ghost p-2" aria-label={t('common.cancel')} onClick={() => setEditing(undefined)}><X className="w-4 h-4" /></button>
+                            <button className="btn-primary inline-flex items-center gap-2 text-sm" disabled={update.isPending}><Save className="w-4 h-4" /> {t('common.save')}</button>
+                          </div>
+                        </form>
+                      </td>
+                    </tr>
+                  )}
+                  </Row>
                 ))}
               </tbody>
             </table>

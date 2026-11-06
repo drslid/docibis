@@ -194,10 +194,20 @@ ${calls}
 |---|---|
 | 400 | Modèle ou données refusés : le champ \`detail\` dit pourquoi. |
 | 401 | Clé absente, inconnue, expirée ou révoquée. |
+| 404 | Modèle inconnu, ou hors de l'espace de la clé. |
 | 413 | Modèle ou données trop gros (tailles maximales de la configuration). |
+| 429 | Trop d'appels par minute, ou quota de documents du jour ou du mois atteint (clé ou espace) : réessayer après \`Retry-After\` secondes. |
 | 503 | Moteur occupé ou en démarrage : réessayer après \`Retry-After\` secondes. |
 
 Les erreurs sont en JSON (RFC 9457) : \`{"status": 400, "title": "Bad Request", "detail": "…"}\`.
+
+## Espaces et quotas
+
+Un administrateur peut garder une clé à un **espace** (Configuration, Espaces) : les modèles
+dont le chemin commence par l'un de ses débuts (\`habitation/\`, \`clauses/\`). La clé ne trouve
+alors que ces modèles, et \`GET /v1/templates\` ne liste qu'eux. Une clé et un espace peuvent
+avoir un **quota** de documents par jour et par mois ; celui de l'espace vaut pour toutes ses
+clés ensemble. La page Clés API montre ce que chaque clé a produit aujourd'hui et ce mois-ci.
 
 ## En arrière-plan
 

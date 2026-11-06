@@ -113,6 +113,7 @@ func TestPostgres(t *testing.T) {
 	checkHistory(t, s)
 	checkTemplates(t, s)
 	checkAliases(t, s)
+	checkSpaces(t, s)
 	checkRenderJobs(t, s)
 }
 

@@ -23,6 +23,7 @@ func requiredRole(method, path string) string {
 		path == "/api/settings", strings.HasPrefix(path, "/api/audit"), strings.HasPrefix(path, "/api/monitoring"), strings.HasPrefix(path, "/api/metrics"),
 		strings.HasPrefix(path, "/api/branding") && write,
 		strings.HasPrefix(path, "/api/fonts") && write,
+		strings.HasPrefix(path, "/api/spaces") && write,
 		strings.HasPrefix(path, "/api/releases") && write,
 		strings.HasPrefix(path, "/api/environments") && write,
 		strings.HasPrefix(path, "/api/templates") && strings.HasSuffix(path, "/native") && method == http.MethodPut,

@@ -1324,6 +1324,14 @@ export const ApiKeyStatus = {
   revoked: 'revoked',
 } as const;
 
+/**
+ * Documents produits aujourd'hui et ce mois-ci
+ */
+export interface Usage {
+  today: number;
+  month: number;
+}
+
 export interface ApiKey {
   id: number;
   /** Application qui utilise la clé */
@@ -1338,6 +1346,13 @@ export interface ApiKey {
   revokedAt?: string;
   /** Appels permis par minute ; 0 = réglage « Appels par minute et par clé » */
   ratePerMinute?: number;
+  /** Espace dont la clé utilise les modèles ; 0 = toute la bibliothèque */
+  spaceId?: number;
+  /** Documents permis par jour ; 0 = sans limite */
+  dailyQuota?: number;
+  /** Documents permis par mois ; 0 = sans limite */
+  monthlyQuota?: number;
+  usage?: Usage;
   status: ApiKeyStatus;
 }
 
@@ -1357,6 +1372,21 @@ export interface ApiKeyCreate {
      * @maximum 100000
      */
   ratePerMinute?: number;
+  /**
+     * Espace dont la clé utilise les modèles ; 0 ou absent = toute la bibliothèque
+     * @minimum 0
+     */
+  spaceId?: number;
+  /**
+     * @minimum 0
+     * @maximum 100000000
+     */
+  dailyQuota?: number;
+  /**
+     * @minimum 0
+     * @maximum 100000000
+     */
+  monthlyQuota?: number;
 }
 
 export interface ApiKeyUpdate {
@@ -1367,6 +1397,59 @@ export interface ApiKeyUpdate {
      * @maximum 100000
      */
   ratePerMinute?: number;
+  /** @minimum 0 */
+  spaceId?: number;
+  /**
+     * @minimum 0
+     * @maximum 100000000
+     */
+  dailyQuota?: number;
+  /**
+     * @minimum 0
+     * @maximum 100000000
+     */
+  monthlyQuota?: number;
+}
+
+/**
+ * Espace d'équipe, les modèles dont le chemin commence par l'un de ses débuts
+ */
+export interface Space {
+  id: number;
+  name: string;
+  /** Débuts des chemins de ses modèles (habitation/, clauses/) ; aucun, toute la bibliothèque */
+  prefixes: string[];
+  /** Documents permis par jour aux clés de l'espace, ensemble ; 0 = sans limite */
+  dailyQuota: number;
+  /** Documents permis par mois aux clés de l'espace, ensemble ; 0 = sans limite */
+  monthlyQuota: number;
+  /** Modèles de la bibliothèque dans l'espace */
+  templates: number;
+  /** Clés actives gardées à l'espace */
+  keys: number;
+  usage: Usage;
+  createdAt: string;
+  createdBy: string;
+}
+
+export interface SpaceInput {
+  /** @maxLength 60 */
+  name: string;
+  /**
+     * @maxItems 50
+     * @items.maxLength 300
+     */
+  prefixes?: string[];
+  /**
+     * @minimum 0
+     * @maximum 100000000
+     */
+  dailyQuota?: number;
+  /**
+     * @minimum 0
+     * @maximum 100000000
+     */
+  monthlyQuota?: number;
 }
 
 export interface ApiKeyCreated {
@@ -4843,6 +4926,358 @@ export const useRevokeApiKey = <TError = ErrorType<UnauthorizedResponse | Proble
         TContext
       > => {
       return useMutation(getRevokeApiKeyMutationOptions(options), queryClient);
+    }
+
+export const getListSpacesUrl = () => {
+
+
+
+
+  return `/api/spaces`
+}
+
+/**
+ * @summary Espaces d'équipe, avec leurs modèles, leurs clés et leur consommation
+ */
+export const listSpaces = async ( options?: Parameters<typeof apiFetch>[1]): Promise<Space[]> => {
+
+  return apiFetch<Space[]>(getListSpacesUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListSpacesQueryKey = () => {
+    return [
+    `/api/spaces`
+    ] as const;
+    }
+
+
+export const getListSpacesQueryOptions = <TData = Awaited<ReturnType<typeof listSpaces>>, TError = ErrorType<UnauthorizedResponse>>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listSpaces>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListSpacesQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listSpaces>>> = ({ signal }) => listSpaces({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listSpaces>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type ListSpacesQueryResult = NonNullable<Awaited<ReturnType<typeof listSpaces>>>
+export type ListSpacesQueryError = ErrorType<UnauthorizedResponse>
+
+
+export function useListSpaces<TData = Awaited<ReturnType<typeof listSpaces>>, TError = ErrorType<UnauthorizedResponse>>(
+  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listSpaces>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listSpaces>>,
+          TError,
+          Awaited<ReturnType<typeof listSpaces>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListSpaces<TData = Awaited<ReturnType<typeof listSpaces>>, TError = ErrorType<UnauthorizedResponse>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listSpaces>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listSpaces>>,
+          TError,
+          Awaited<ReturnType<typeof listSpaces>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListSpaces<TData = Awaited<ReturnType<typeof listSpaces>>, TError = ErrorType<UnauthorizedResponse>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listSpaces>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Espaces d'équipe, avec leurs modèles, leurs clés et leur consommation
+ */
+
+export function useListSpaces<TData = Awaited<ReturnType<typeof listSpaces>>, TError = ErrorType<UnauthorizedResponse>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listSpaces>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getListSpacesQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreateSpaceUrl = () => {
+
+
+
+
+  return `/api/spaces`
+}
+
+/**
+ * @summary Crée un espace (administrateurs)
+ */
+export const createSpace = async (spaceInput: SpaceInput, options?: Parameters<typeof apiFetch>[1]): Promise<Space> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return apiFetch<Space>(getCreateSpaceUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(spaceInput)
+  }
+);}
+
+
+
+
+
+export const getCreateSpaceMutationKey = () => ['createSpace'] as const;
+
+export const getCreateSpaceMutationOptions = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createSpace>>, TError,CreateSpaceMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createSpace>>, TError,CreateSpaceMutationVariables, TContext> => {
+
+const mutationKey = getCreateSpaceMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createSpace>>, CreateSpaceMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  createSpace(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateSpaceMutationResult = NonNullable<Awaited<ReturnType<typeof createSpace>>>
+    export type CreateSpaceMutationBody = SpaceInput
+    export type CreateSpaceMutationError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse>
+    export type CreateSpaceMutationVariables = {data: SpaceInput}
+
+    /**
+ * @summary Crée un espace (administrateurs)
+ */
+export const useCreateSpace = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createSpace>>, TError,CreateSpaceMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof createSpace>>,
+        TError,
+        CreateSpaceMutationVariables,
+        TContext
+      > => {
+      return useMutation(getCreateSpaceMutationOptions(options), queryClient);
+    }
+
+export const getUpdateSpaceUrl = (id: number,) => {
+
+
+
+
+  return `/api/spaces/${id}`
+}
+
+/**
+ * @summary Change un espace (administrateurs)
+ */
+export const updateSpace = async (id: number,
+    spaceInput: SpaceInput, options?: Parameters<typeof apiFetch>[1]): Promise<Space> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return apiFetch<Space>(getUpdateSpaceUrl(id),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(spaceInput)
+  }
+);}
+
+
+
+
+
+export const getUpdateSpaceMutationKey = () => ['updateSpace'] as const;
+
+export const getUpdateSpaceMutationOptions = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateSpace>>, TError,UpdateSpaceMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateSpace>>, TError,UpdateSpaceMutationVariables, TContext> => {
+
+const mutationKey = getUpdateSpaceMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateSpace>>, UpdateSpaceMutationVariables> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateSpace(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateSpaceMutationResult = NonNullable<Awaited<ReturnType<typeof updateSpace>>>
+    export type UpdateSpaceMutationBody = SpaceInput
+    export type UpdateSpaceMutationError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>
+    export type UpdateSpaceMutationVariables = {id: number;data: SpaceInput}
+
+    /**
+ * @summary Change un espace (administrateurs)
+ */
+export const useUpdateSpace = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateSpace>>, TError,UpdateSpaceMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof updateSpace>>,
+        TError,
+        UpdateSpaceMutationVariables,
+        TContext
+      > => {
+      return useMutation(getUpdateSpaceMutationOptions(options), queryClient);
+    }
+
+export const getDeleteSpaceUrl = (id: number,) => {
+
+
+
+
+  return `/api/spaces/${id}`
+}
+
+/**
+ * @summary Supprime un espace qu'aucune clé active n'utilise (administrateurs)
+ */
+export const deleteSpace = async (id: number, options?: Parameters<typeof apiFetch>[1]): Promise<void> => {
+
+  return apiFetch<void>(getDeleteSpaceUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDeleteSpaceMutationKey = () => ['deleteSpace'] as const;
+
+export const getDeleteSpaceMutationOptions = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteSpace>>, TError,DeleteSpaceMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteSpace>>, TError,DeleteSpaceMutationVariables, TContext> => {
+
+const mutationKey = getDeleteSpaceMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteSpace>>, DeleteSpaceMutationVariables> = (props) => {
+          const {id} = props ?? {};
+
+          return  deleteSpace(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteSpaceMutationResult = NonNullable<Awaited<ReturnType<typeof deleteSpace>>>
+
+    export type DeleteSpaceMutationError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>
+    export type DeleteSpaceMutationVariables = {id: number}
+
+    /**
+ * @summary Supprime un espace qu'aucune clé active n'utilise (administrateurs)
+ */
+export const useDeleteSpace = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteSpace>>, TError,DeleteSpaceMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof deleteSpace>>,
+        TError,
+        DeleteSpaceMutationVariables,
+        TContext
+      > => {
+      return useMutation(getDeleteSpaceMutationOptions(options), queryClient);
     }
 
 export const getListUsersUrl = (params?: ListUsersParams,) => {

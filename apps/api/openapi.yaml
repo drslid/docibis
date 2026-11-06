@@ -783,6 +783,88 @@ paths:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/Problem"
+  /api/spaces:
+    get:
+      operationId: listSpaces
+      tags: [console]
+      summary: Espaces d'équipe, avec leurs modèles, leurs clés et leur consommation
+      responses:
+        "200":
+          description: Les espaces, par nom
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Space"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      operationId: createSpace
+      tags: [console]
+      summary: Crée un espace (administrateurs)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SpaceInput"
+      responses:
+        "201":
+          description: Espace créé
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Space"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /api/spaces/{id}:
+    parameters:
+      - {name: id, in: path, required: true, schema: {type: integer, format: int64}}
+    put:
+      operationId: updateSpace
+      tags: [console]
+      summary: Change un espace (administrateurs)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SpaceInput"
+      responses:
+        "200":
+          description: Espace enregistré
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Space"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      operationId: deleteSpace
+      tags: [console]
+      summary: Supprime un espace qu'aucune clé active n'utilise (administrateurs)
+      responses:
+        "204":
+          description: Espace supprimé
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
   /api/users:
     get:
       operationId: listUsers
@@ -3943,6 +4025,18 @@ components:
         ratePerMinute:
           description: Appels permis par minute ; 0 = réglage « Appels par minute et par clé »
           type: integer
+        spaceId:
+          description: Espace dont la clé utilise les modèles ; 0 = toute la bibliothèque
+          type: integer
+          format: int64
+        dailyQuota:
+          description: Documents permis par jour ; 0 = sans limite
+          type: integer
+        monthlyQuota:
+          description: Documents permis par mois ; 0 = sans limite
+          type: integer
+        usage:
+          $ref: "#/components/schemas/Usage"
         status:
           type: string
           enum: [active, expired, revoked]
@@ -3965,6 +4059,19 @@ components:
           type: integer
           minimum: 0
           maximum: 100000
+        spaceId:
+          description: Espace dont la clé utilise les modèles ; 0 ou absent = toute la bibliothèque
+          type: integer
+          format: int64
+          minimum: 0
+        dailyQuota:
+          type: integer
+          minimum: 0
+          maximum: 100000000
+        monthlyQuota:
+          type: integer
+          minimum: 0
+          maximum: 100000000
     ApiKeyUpdate:
       type: object
       properties:
@@ -3975,6 +4082,84 @@ components:
           type: integer
           minimum: 0
           maximum: 100000
+        spaceId:
+          type: integer
+          format: int64
+          minimum: 0
+        dailyQuota:
+          type: integer
+          minimum: 0
+          maximum: 100000000
+        monthlyQuota:
+          type: integer
+          minimum: 0
+          maximum: 100000000
+    Usage:
+      description: Documents produits aujourd'hui et ce mois-ci
+      type: object
+      required: [today, month]
+      properties:
+        today:
+          type: integer
+          format: int64
+        month:
+          type: integer
+          format: int64
+    Space:
+      description: Espace d'équipe, les modèles dont le chemin commence par l'un de ses débuts
+      type: object
+      required: [id, name, prefixes, dailyQuota, monthlyQuota, templates, keys, usage, createdAt, createdBy]
+      properties:
+        id:
+          type: integer
+          format: int64
+        name:
+          type: string
+        prefixes:
+          description: Débuts des chemins de ses modèles (habitation/, clauses/) ; aucun, toute la bibliothèque
+          type: array
+          items:
+            type: string
+        dailyQuota:
+          description: Documents permis par jour aux clés de l'espace, ensemble ; 0 = sans limite
+          type: integer
+        monthlyQuota:
+          description: Documents permis par mois aux clés de l'espace, ensemble ; 0 = sans limite
+          type: integer
+        templates:
+          description: Modèles de la bibliothèque dans l'espace
+          type: integer
+        keys:
+          description: Clés actives gardées à l'espace
+          type: integer
+        usage:
+          $ref: "#/components/schemas/Usage"
+        createdAt:
+          type: string
+          format: date-time
+        createdBy:
+          type: string
+    SpaceInput:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          maxLength: 60
+        prefixes:
+          type: array
+          maxItems: 50
+          items:
+            type: string
+            maxLength: 300
+        dailyQuota:
+          type: integer
+          minimum: 0
+          maximum: 100000000
+        monthlyQuota:
+          type: integer
+          minimum: 0
+          maximum: 100000000
     ApiKeyCreated:
       type: object
       required: [key, secret]

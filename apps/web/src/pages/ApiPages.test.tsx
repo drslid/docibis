@@ -33,7 +33,7 @@ describe('ApiKeysPage', () => {
         keys.push(key)
         return json({ key, secret: 'dib_abcdefgh_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx' }, 201)
       }
-      return json(url === '/api/keys' ? keys : info)
+      return json(url === '/api/keys' ? keys : url === '/api/spaces' ? [] : info)
     }))
     show(<ApiKeysPage />)
     expect(await screen.findByText('Aucune clé')).toBeInTheDocument()

@@ -100,4 +100,40 @@ describe('ConfigPage', () => {
     expect(await screen.findByText('HelveticaNeueLTStd-Roman.otf')).toBeInTheDocument()
     expect(fetch.mock.calls.some(([url, init]) => url === '/api/fonts' && init?.method === 'POST')).toBe(true)
   })
+
+  it('creates a space with its paths and quotas', async () => {
+    const spaces: unknown[] = []
+    const fetch = vi.fn(async (url: string, init?: RequestInit) => {
+      let body: unknown = page
+      if (url === '/api/spaces' && init?.method === 'POST') {
+        const input = JSON.parse(String(init.body))
+        const created = { id: 1, ...input, prefixes: input.prefixes.map((p: string) => `${p.replace(/\/$/, '')}/`), templates: 4, keys: 0, usage: { today: 3, month: 12 }, createdAt: '2026-11-06T10:00:00Z', createdBy: 'admin' }
+        spaces.push(created)
+        return new Response(JSON.stringify(created), { status: 201, headers: { 'Content-Type': 'application/json' } })
+      }
+      if (url === '/api/spaces') body = spaces
+      if (url.includes('/api/info')) body = { name: 'DocIbis', version: 'dev', instance: 'INT', database: { engine: 'sqlite', replication: { enabled: false, locked: false } } }
+      return new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } })
+    })
+    vi.stubGlobal('fetch', fetch)
+    render(
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <MemoryRouter initialEntries={['/configuration/espaces']}>
+          <Routes>
+            <Route path="/configuration/:section?" element={<ConfigPage />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    )
+    fireEvent.click(await screen.findByRole('button', { name: /Nouvel espace/ }))
+    fireEvent.change(screen.getByLabelText('Nom'), { target: { value: 'Habitation' } })
+    fireEvent.change(screen.getByLabelText('Débuts de chemin, un par ligne'), { target: { value: 'habitation/\nclauses' } })
+    fireEvent.change(screen.getByLabelText('Documents par jour'), { target: { value: '500' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }))
+    expect(await screen.findByText('4 modèle(s), 0 clé(s) active(s)')).toBeInTheDocument()
+    expect(screen.getByText('clauses/')).toBeInTheDocument()
+    expect(screen.getByText('3 / 500')).toBeInTheDocument()
+    const post = fetch.mock.calls.find(([url, init]) => url === '/api/spaces' && init?.method === 'POST')
+    expect(JSON.parse(String(post?.[1]?.body))).toEqual({ name: 'Habitation', prefixes: ['habitation/', 'clauses'], dailyQuota: 500, monthlyQuota: 0 })
+  })
 })

@@ -25,6 +25,11 @@ type APIKey struct {
 	RevokedAt     *time.Time `bun:"revoked_at"`
 	// Calls allowed per minute; 0 takes the setting api_rate_per_minute.
 	RatePerMinute int `bun:"rate_per_minute,notnull"`
+	// SpaceID keeps the key to the templates of a space; 0 for the whole library.
+	SpaceID int64 `bun:"space_id,notnull"`
+	// Documents allowed per day and per month; 0 for no limit.
+	DailyQuota   int `bun:"daily_quota,notnull"`
+	MonthlyQuota int `bun:"monthly_quota,notnull"`
 	// UserID is the account of a personal token seen as a key; 0 for a key.
 	UserID int64 `bun:"-"`
 }
@@ -96,9 +101,10 @@ func (s *Store) APIKeyByID(ctx context.Context, id int64) (k APIKey, ok bool, er
 	return k, err == nil, err
 }
 
-// UpdateAPIKey saves the name and the calls per minute of a key.
+// UpdateAPIKey saves the name, the calls per minute, the space and the quotas
+// of a key.
 func (s *Store) UpdateAPIKey(ctx context.Context, k *APIKey) error {
-	if _, err := s.DB.NewUpdate().Model(k).Column("name", "rate_per_minute").WherePK().Exec(ctx); err != nil {
+	if _, err := s.DB.NewUpdate().Model(k).Column("name", "rate_per_minute", "space_id", "daily_quota", "monthly_quota").WherePK().Exec(ctx); err != nil {
 		return err
 	}
 	return s.Sync(ctx)

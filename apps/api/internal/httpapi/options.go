@@ -442,6 +442,9 @@ func (s *Server) findTemplate(ctx context.Context, name string) (store.Template,
 		if !ok {
 			continue
 		}
+		if err := s.checkSpace(ctx, t.Path); err != nil {
+			return t, store.TemplateVersion{}, err
+		}
 		if t.Published == 0 {
 			return t, store.TemplateVersion{}, &tryError{http.StatusNotFound, fmt.Sprintf("Le modèle %q n'a pas de version publiée.", t.Path)}
 		}

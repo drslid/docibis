@@ -771,6 +771,9 @@ func (s *Server) record(ctx context.Context, source, actor string, doc document,
 	if err := st.RecordRender(ctx, r); err != nil {
 		s.logger.Warn("render not recorded in the history", "error", err)
 	}
+	if r.Status == "ok" {
+		s.countDocument(ctx)
+	}
 	s.metrics.document(source, r.Status, took)
 }
 

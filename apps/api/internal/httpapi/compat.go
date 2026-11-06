@@ -63,6 +63,11 @@ func (s *Server) DocmosisRender(ctx context.Context, req DocmosisRenderRequestOb
 	if wait, msg := s.throttle(k); wait > 0 {
 		return DocmosisRender429JSONResponse(docmosisError(msg)), nil
 	}
+	if wait, msg, err := s.quotaWait(ctx, k); err != nil {
+		return nil, err
+	} else if wait > 0 {
+		return DocmosisRender429JSONResponse(docmosisError(msg)), nil
+	}
 	ctx = context.WithValue(ctx, keyKey, k)
 
 	format := ""
