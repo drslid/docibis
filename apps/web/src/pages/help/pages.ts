@@ -485,6 +485,12 @@ PROD, et la publie si on le demande. L'administrateur déclare les environnement
 Configuration, Environnements, avec une clé de l'autre DocIbis créée avec « recevoir des
 modèles ». Chaque envoi est gardé dans l'historique du modèle et dans le journal d'audit
 des deux côtés.
+
+Les exports et les envois sont **signés** par l'instance qui les fait : un zip modifié après
+son export est refusé. **Voir ce qui change**, à l'import, montre la signature et, modèle par
+modèle, ce qui sera créé ou mis à jour, avant d'importer. En PROD, l'administrateur active
+« Imports signés seulement » (Configuration, Sécurité) et colle dans « Instances de
+confiance » la clé publique de REC, affichée dans Configuration, Environnements de REC.
 `
 }
 

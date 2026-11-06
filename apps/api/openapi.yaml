@@ -2262,6 +2262,20 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
+  /api/signing-key:
+    get:
+      operationId: getSigningKey
+      tags: [console]
+      summary: Clé publique de cette instance, à déclarer dans les instances qui reçoivent ses modèles
+      responses:
+        "200":
+          description: La clé
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SigningKey"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
   /api/environments:
     get:
       operationId: listEnvironments
@@ -3662,6 +3676,9 @@ components:
           format: binary
         publish:
           type: boolean
+        dryRun:
+          description: Aperçu seulement, rien n'est enregistré (signature, modèles créés, mis à jour ou inchangés)
+          type: boolean
     FontUpload:
       type: object
       required: [file]
@@ -3758,6 +3775,67 @@ components:
           type: array
           items:
             type: string
+        dryRun:
+          description: Aperçu, rien n'a été enregistré
+          type: boolean
+        signature:
+          $ref: "#/components/schemas/ImportSignature"
+        items:
+          description: Ce qui arrive à chaque modèle du zip
+          type: array
+          items:
+            $ref: "#/components/schemas/ImportItem"
+    ImportSignature:
+      description: Signature du zip ; un zip modifié après son export est refusé
+      type: object
+      required: [status]
+      properties:
+        status:
+          description: trusted, signé par cette instance ou une instance de confiance ; untrusted, signé par une clé inconnue ; unsigned, sans signature
+          type: string
+          enum: [trusted, untrusted, unsigned]
+        instance:
+          description: Nom de l'instance qui a signé, donné par elle
+          type: string
+        signer:
+          description: Nom de l'instance de confiance qui correspond à la clé
+          type: string
+        publicKey:
+          type: string
+        signedAt:
+          type: string
+          format: date-time
+    ImportItem:
+      type: object
+      required: [path, action]
+      properties:
+        path:
+          type: string
+        action:
+          description: created, nouveau modèle ; updated, nouvelle version ou publication ; unchanged ; failed
+          type: string
+          enum: [created, updated, unchanged, failed]
+        reference:
+          description: Avec son PDF de référence
+          type: boolean
+        native:
+          description: Avec sa copie Typst
+          type: boolean
+        aliases:
+          description: Anciens noms ajoutés
+          type: integer
+        detail:
+          description: L'erreur, pour failed
+          type: string
+    SigningKey:
+      type: object
+      required: [instance, publicKey]
+      properties:
+        instance:
+          type: string
+        publicKey:
+          description: Clé publique qui signe les exports et les envois de cette instance (ed25519:…)
+          type: string
     CheckResult:
       description: Comparaison au PDF de référence, page par page
       type: object

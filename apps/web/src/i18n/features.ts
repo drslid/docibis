@@ -150,6 +150,8 @@ export const featFr = {
   'envs.url': 'Adresse',
   'envs.key': 'Clé API',
   'envs.none': 'Aucun environnement.',
+  'envs.signingKey': 'Clé publique de cette instance',
+  'envs.signingKeyHelp': 'Elle signe les exports et les envois de modèles. Collez cette ligne dans Configuration, Sécurité, Instances de confiance des environnements qui les reçoivent.',
   'envs.add': 'Ajouter un environnement',
 
   'keys.receives': 'Peut aussi recevoir des modèles (envoyés depuis un autre environnement)',
@@ -315,6 +317,8 @@ export const featEn: Record<FeatKey, string> = {
   'envs.url': 'Address',
   'envs.key': 'API key',
   'envs.none': 'No environment.',
+  'envs.signingKey': 'Public key of this instance',
+  'envs.signingKeyHelp': 'It signs the exports and the templates sent. Paste this line in Configuration, Security, Trusted instances of the environments that receive them.',
   'envs.add': 'Add an environment',
 
   'keys.receives': 'Can also receive templates (sent from another environment)',
@@ -478,6 +482,8 @@ export const featDe: Record<FeatKey, string> = {
   'envs.url': 'Adresse',
   'envs.key': 'API-Schlüssel',
   'envs.none': 'Keine Umgebung.',
+  'envs.signingKey': 'Öffentlicher Schlüssel dieser Instanz',
+  'envs.signingKeyHelp': 'Er signiert die Exporte und die gesendeten Vorlagen. Fügen Sie diese Zeile in Konfiguration, Sicherheit, Vertrauenswürdige Instanzen der empfangenden Umgebungen ein.',
   'envs.add': 'Umgebung hinzufügen',
 
   'keys.receives': 'Kann auch Vorlagen empfangen (von einer anderen Umgebung gesendet)',
@@ -641,6 +647,8 @@ export const featIt: Record<FeatKey, string> = {
   'envs.url': 'Indirizzo',
   'envs.key': 'Chiave API',
   'envs.none': 'Nessun ambiente.',
+  'envs.signingKey': 'Chiave pubblica di questa istanza',
+  'envs.signingKeyHelp': 'Firma le esportazioni e i modelli inviati. Incolla questa riga in Configurazione, Sicurezza, Istanze attendibili degli ambienti che li ricevono.',
   'envs.add': 'Aggiungi un ambiente',
 
   'keys.receives': 'Può anche ricevere modelli (inviati da un altro ambiente)',

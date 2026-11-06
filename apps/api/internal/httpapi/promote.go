@@ -210,6 +210,7 @@ func (s *Server) sendVersion(ctx context.Context, env environment, t store.Templ
 	if err != nil {
 		return "", err
 	}
+	pack = s.signZip(ctx, pack)
 	var body bytes.Buffer
 	mw := multipart.NewWriter(&body)
 	fw, err := mw.CreateFormFile("file", "promotion.zip")
@@ -335,6 +336,10 @@ func (s *Server) ReceiveTemplates(ctx context.Context, req ReceiveTemplatesReque
 	}
 	f, err := readLibraryForm(req.Body, map[string]int{"file": maxImportMB})
 	var entries map[string]*importEntry
+	var sig ImportSignature
+	if err == nil {
+		sig, err = s.acceptZip(ctx, f.files["file"])
+	}
 	if err == nil {
 		entries, err = readImport(f.files["file"])
 	}
@@ -346,10 +351,11 @@ func (s *Server) ReceiveTemplates(ctx context.Context, req ReceiveTemplatesReque
 		return ReceiveTemplates400ApplicationProblemPlusJSONResponse{BadRequestApplicationProblemPlusJSONResponse(pb)}, nil
 	}
 	actor := "clé " + k.Name
-	report := s.importTemplates(ctx, entries, actor, yes(f.values["publish"], false))
+	report := s.importTemplates(ctx, entries, actor, yes(f.values["publish"], false), false)
+	report.Signature = &sig
 	s.describeLater(context.WithoutCancel(ctx))
-	details := fmt.Sprintf("%d créés, %d mis à jour, %d inchangés, %d références, %d erreurs",
-		report.Created, report.Updated, report.Unchanged, report.References, len(report.Errors))
+	details := fmt.Sprintf("%d créés, %d mis à jour, %d inchangés, %d références, %d erreurs, %s",
+		report.Created, report.Updated, report.Unchanged, report.References, len(report.Errors), signatureNote(sig))
 	if from := shorten(f.values["from"], 20); from != "" {
 		details += ", depuis " + from
 	}

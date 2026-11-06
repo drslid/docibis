@@ -31,6 +31,7 @@ import {
   getListEnvironmentsQueryKey,
   useGetBranding,
   useGetSettings,
+  useGetSigningKey,
   useListEnvironments,
   useSaveEnvironments,
   useUpdateBranding,
@@ -40,6 +41,7 @@ import {
   type Setting,
 } from '@/api/generated/docibis'
 import { LoadingSpinner } from '@/components/common/LoadingSpinner'
+import { CopyButton } from '@/components/common/CopyButton'
 import { SettingsCard } from '@/components/common/SettingsCard'
 import { FontsSection } from '@/components/config/FontsSection'
 import { BrandLogo, companyLogoURL } from '@/components/layout/BrandLogo'
@@ -204,6 +206,7 @@ function EnvironmentsSection() {
   const { t } = useI18n()
   const queryClient = useQueryClient()
   const { data: saved } = useListEnvironments()
+  const { data: signing } = useGetSigningKey()
   const [draft, setDraft] = useState<Environment[] | null>(null)
   const [notice, setNotice] = useState('')
   const save = useSaveEnvironments({
@@ -218,6 +221,7 @@ function EnvironmentsSection() {
   if (!saved) return <Loader2 className="w-5 h-5 animate-spin text-gray-400" />
   const rows = draft ?? saved
   const set = (i: number, e: Environment) => { setNotice(''); setDraft(rows.map((x, j) => (j === i ? e : x))) }
+  const line = signing ? `${signing.instance} ${signing.publicKey}` : ''
 
   return (
     <SettingsCard title={t('envs.title')}>
@@ -243,6 +247,16 @@ function EnvironmentsSection() {
       </div>
       {save.error && <p className="text-sm text-red-700 mt-2" role="alert">{save.error.problem?.detail ?? save.error.message}</p>}
       {notice && !save.error && <p className="text-sm text-gray-600 dark:text-gray-300 mt-2" role="status">{notice}</p>}
+      {line && (
+        <div className="mt-6 pt-4 border-t border-gray-100 dark:border-gray-700">
+          <div className="label">{t('envs.signingKey')}</div>
+          <div className="flex items-center gap-2">
+            <code className="flex-1 min-w-0 text-xs break-all rounded-md bg-gray-50 dark:bg-gray-900 px-2 py-1.5">{line}</code>
+            <CopyButton text={line} className="shrink-0 py-1 px-2 text-xs" />
+          </div>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{t('envs.signingKeyHelp')}</p>
+        </div>
+      )}
     </SettingsCard>
   )
 }

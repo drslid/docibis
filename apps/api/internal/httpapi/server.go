@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -40,6 +41,8 @@ type Server struct {
 	system   systemSampler
 	overlays overlayCache
 	fonts    fontState
+	// signing guards the making of the signing key.
+	signing sync.Mutex
 	// native runs the Typst copies (nil until its workers are warm).
 	native      atomic.Pointer[nativeBox]
 	nativeFiles nativeFiles

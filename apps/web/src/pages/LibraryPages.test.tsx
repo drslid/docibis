@@ -93,6 +93,32 @@ describe('LibraryPage', () => {
     expect(await screen.findByText('acme/contracts/fiche_conseil.docx')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /Ajouter un modèle/ })).not.toBeInTheDocument()
   })
+
+  it('shows what an import changes, signature included, before importing', async () => {
+    const report = (dryRun: boolean) => ({
+      created: 1, updated: 0, unchanged: 1, references: 1, errors: [], ...(dryRun ? { dryRun } : {}),
+      signature: { status: 'trusted', signer: 'INT', instance: 'INT', signedAt: '2026-11-06T10:00:00Z' },
+      items: [{ path: 'habitation/fiche.docx', action: 'created', reference: true }, { path: 'habitation/cg.pdf', action: 'unchanged' }],
+    })
+    const calls = serve((url, method) => {
+      if (url === '/api/templates/import' && method === 'POST') {
+        const dryRun = (calls.at(-1)?.body as FormData).get('dryRun') === 'true'
+        return report(dryRun)
+      }
+      return url.startsWith('/api/templates/stats') ? [] : url.startsWith('/api/templates') ? [fiche] : undefined
+    })
+    show(<LibraryPage />)
+    fireEvent.click(await screen.findByRole('button', { name: /Importer un zip/ }))
+    fireEvent.change(document.getElementById('lib-zip')!, { target: { files: [new File(['PK'], 'export.zip')] } })
+    fireEvent.click(screen.getByRole('button', { name: /Voir ce qui change/ }))
+    expect(await screen.findByText(/Signé par INT le/)).toBeInTheDocument()
+    expect(screen.getByText('nouveau')).toBeInTheDocument()
+    expect(screen.getByText(/À l’import :/)).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Importer' }))
+    await waitFor(() => expect(screen.queryByText(/À l’import :/)).not.toBeInTheDocument())
+    const posts = calls.filter((c) => c.url === '/api/templates/import')
+    expect(posts.map((c) => (c.body as FormData).get('dryRun'))).toEqual(['true', null])
+  })
 })
 
 describe('TemplatePage', () => {

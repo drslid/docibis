@@ -654,6 +654,10 @@ func (e *importEntry) unpack() error {
 func (s *Server) ImportTemplates(ctx context.Context, req ImportTemplatesRequestObject) (ImportTemplatesResponseObject, error) {
 	f, err := readLibraryForm(req.Body, map[string]int{"file": maxImportMB})
 	var entries map[string]*importEntry
+	var sig ImportSignature
+	if err == nil {
+		sig, err = s.acceptZip(ctx, f.files["file"])
+	}
 	if err == nil {
 		entries, err = readImport(f.files["file"])
 	}
@@ -665,11 +669,27 @@ func (s *Server) ImportTemplates(ctx context.Context, req ImportTemplatesRequest
 		return ImportTemplates400ApplicationProblemPlusJSONResponse{BadRequestApplicationProblemPlusJSONResponse(pb)}, nil
 	}
 	me, _ := userFrom(ctx)
-	report := s.importTemplates(ctx, entries, me.Username, yes(f.values["publish"], true))
+	dryRun := yes(f.values["dryRun"], false)
+	report := s.importTemplates(ctx, entries, me.Username, yes(f.values["publish"], true), dryRun)
+	report.Signature = &sig
+	if dryRun {
+		return ImportTemplates200JSONResponse(report), nil
+	}
 	s.describeLater(context.WithoutCancel(ctx))
-	s.audit(ctx, me.Username, "template.import", "", fmt.Sprintf("%d créés, %d mis à jour, %d inchangés, %d références, %d copies Typst, %d erreurs",
-		report.Created, report.Updated, report.Unchanged, report.References, valueOf(report.Natives), len(report.Errors)))
+	s.audit(ctx, me.Username, "template.import", "", fmt.Sprintf("%d créés, %d mis à jour, %d inchangés, %d références, %d copies Typst, %d erreurs, %s",
+		report.Created, report.Updated, report.Unchanged, report.References, valueOf(report.Natives), len(report.Errors), signatureNote(sig)))
 	return ImportTemplates200JSONResponse(report), nil
+}
+
+// signatureNote tells in the journal who signed an import.
+func signatureNote(sig ImportSignature) string {
+	switch sig.Status {
+	case Trusted:
+		return "signé par " + valueOf(sig.Signer)
+	case Untrusted:
+		return fmt.Sprintf("signé par une clé inconnue (%s)", valueOf(sig.Instance))
+	}
+	return "non signé"
 }
 
 // readImport reads a zip of templates: each X.docx (or .odt, .pdf) may come
@@ -736,8 +756,12 @@ func readImport(raw []byte) (map[string]*importEntry, error) {
 
 // importTemplates adds what changed: a new template, or a new version when
 // the file differs from the latest one. References go to the version served.
-func (s *Server) importTemplates(ctx context.Context, entries map[string]*importEntry, actor string, publish bool) ImportReport {
-	report := ImportReport{Errors: []string{}}
+// A dry run only tells what would change.
+func (s *Server) importTemplates(ctx context.Context, entries map[string]*importEntry, actor string, publish, dryRun bool) ImportReport {
+	report := ImportReport{Errors: []string{}, Items: &[]ImportItem{}}
+	if dryRun {
+		report.DryRun = ptr(true)
+	}
 	paths := make([]string, 0, len(entries))
 	for p := range entries {
 		paths = append(paths, p)
@@ -748,55 +772,83 @@ func (s *Server) importTemplates(ctx context.Context, entries map[string]*import
 		if err := e.unpack(); err != nil {
 			_, pb := s.failure(err)
 			report.Errors = append(report.Errors, p+" : "+trimmed(pb.Detail))
+			*report.Items = append(*report.Items, ImportItem{Path: p, Action: ImportItemActionFailed, Detail: ptr(trimmed(pb.Detail))})
 			continue
 		}
-		s.importOne(ctx, &report, p, e, actor, publish)
+		s.importOne(ctx, &report, p, e, actor, publish, dryRun)
 		*e = importEntry{}
 	}
 	return report
 }
 
 // importOne imports a template of the zip and what goes with it.
-func (s *Server) importOne(ctx context.Context, report *ImportReport, p string, e *importEntry, actor string, publish bool) {
+func (s *Server) importOne(ctx context.Context, report *ImportReport, p string, e *importEntry, actor string, publish, dryRun bool) {
 	st := s.db.Load()
+	item := ImportItem{Path: p, Action: ImportItemActionUnchanged}
+	fail := func(msg string) {
+		report.Errors = append(report.Errors, msg)
+		if item.Action != ImportItemActionFailed {
+			item.Action, item.Detail = ImportItemActionFailed, ptr(msg)
+		}
+	}
+	defer func() { *report.Items = append(*report.Items, item) }()
 	t, exists, err := st.TemplateByName(ctx, p)
 	if err != nil {
-		report.Errors = append(report.Errors, fmt.Sprintf("%s : %v", p, err))
+		fail(fmt.Sprintf("%s : %v", p, err))
 		return
 	}
 	if len(e.file) == 0 && !exists {
-		report.Errors = append(report.Errors, p+" : référence sans modèle.")
+		fail(p + " : référence sans modèle.")
 		return
 	}
 	if len(e.file) > 0 {
-		changed, err := s.importFile(ctx, &t, exists, p, e.file, actor, publish)
+		var changed bool
+		if dryRun {
+			changed, err = s.planFile(ctx, &t, exists, p, e.file, publish)
+		} else {
+			changed, err = s.importFile(ctx, &t, exists, p, e.file, actor, publish)
+		}
 		switch {
 		case err != nil:
 			_, pb := s.failure(err)
-			report.Errors = append(report.Errors, p+" : "+trimmed(pb.Detail))
+			fail(p + " : " + trimmed(pb.Detail))
 			return
 		case !exists:
 			report.Created++
+			item.Action = ImportItemActionCreated
 		case changed:
 			report.Updated++
+			item.Action = ImportItemActionUpdated
 		default:
 			report.Unchanged++
 		}
 	}
 	if len(e.reference) > 0 {
-		if err := s.importReference(ctx, t, e); err != nil {
+		if err := s.importReference(ctx, t, e, dryRun); err != nil {
 			_, pb := s.failure(err)
-			report.Errors = append(report.Errors, p+" (référence) : "+trimmed(pb.Detail))
+			fail(p + " (référence) : " + trimmed(pb.Detail))
 		} else {
 			report.References++
+			item.Reference = ptr(true)
 		}
 	}
 	if len(e.native) > 0 {
-		if changed, err := s.importNative(ctx, t, e.native, actor); err != nil {
+		var changed bool
+		switch {
+		case dryRun && t.Kind != "template":
+			err = refuse("un PDF fixe n'a pas de copie Typst.")
+		case dryRun:
+			err = checkNativeSource(e.native)
+			changed = err == nil
+		default:
+			changed, err = s.importNative(ctx, t, e.native, actor)
+		}
+		if err != nil {
 			_, pb := s.failure(err)
-			report.Errors = append(report.Errors, p+" (copie Typst) : "+trimmed(pb.Detail))
+			fail(p + " (copie Typst) : " + trimmed(pb.Detail))
 		} else if changed {
 			report.Natives = ptr(valueOf(report.Natives) + 1)
+			item.Native = ptr(true)
 		}
 	}
 	for _, line := range strings.Split(string(e.aliases), "\n") {
@@ -804,16 +856,47 @@ func (s *Server) importOne(ctx context.Context, report *ImportReport, p string, 
 		if err != nil || name == "" || name == t.Path {
 			continue
 		}
-		added, err := st.AddTemplateAlias(ctx, t.ID, name, actor)
+		var added bool
+		if dryRun {
+			var owner int64
+			if owner, err = st.NameOwner(ctx, name); err == nil && owner != 0 && owner != t.ID {
+				err = store.ErrNameTaken
+			}
+			added = owner == 0
+		} else {
+			added, err = st.AddTemplateAlias(ctx, t.ID, name, actor)
+		}
 		switch {
 		case errors.Is(err, store.ErrNameTaken):
-			report.Errors = append(report.Errors, fmt.Sprintf("%s (ancien nom %s) : un autre modèle porte déjà ce nom.", p, name))
+			fail(fmt.Sprintf("%s (ancien nom %s) : un autre modèle porte déjà ce nom.", p, name))
 		case err != nil:
-			report.Errors = append(report.Errors, fmt.Sprintf("%s (ancien nom %s) : %v", p, name, err))
+			fail(fmt.Sprintf("%s (ancien nom %s) : %v", p, name, err))
 		case added:
 			report.Aliases = ptr(valueOf(report.Aliases) + 1)
+			item.Aliases = ptr(valueOf(item.Aliases) + 1)
 		}
 	}
+}
+
+// planFile tells whether importFile would change the template, without
+// writing anything.
+func (s *Server) planFile(ctx context.Context, t *store.Template, exists bool, p string, raw []byte, publish bool) (bool, error) {
+	kind, v, err := s.newVersion(ctx, p, raw, false)
+	if err != nil {
+		return false, err
+	}
+	if !exists {
+		t.Path, t.Kind = p, kind
+		return true, nil
+	}
+	if kind != t.Kind {
+		return false, refuse("le type change (%s → %s).", t.Kind, kind)
+	}
+	last, ok, err := s.db.Load().TemplateVersion(ctx, t.ID, t.Versions)
+	if err != nil {
+		return false, err
+	}
+	return !ok || last.SHA256 != v.SHA256 || (publish && t.Published != last.Number), nil
 }
 
 func (s *Server) importFile(ctx context.Context, t *store.Template, exists bool, p string, raw []byte, actor string, publish bool) (bool, error) {
@@ -846,7 +929,7 @@ func (s *Server) importFile(ctx context.Context, t *store.Template, exists bool,
 	return true, nil
 }
 
-func (s *Server) importReference(ctx context.Context, t store.Template, e *importEntry) error {
+func (s *Server) importReference(ctx context.Context, t store.Template, e *importEntry, dryRun bool) error {
 	st := s.db.Load()
 	if t.Kind != "template" {
 		return refuse("un PDF fixe n'a pas de référence.")
@@ -855,7 +938,7 @@ func (s *Server) importReference(ctx context.Context, t store.Template, e *impor
 	if data == "" {
 		return refuse("X.reference.pdf doit venir avec X.data.json, les données utilisées.")
 	}
-	if err := checkReference(e.reference, data); err != nil {
+	if err := checkReference(e.reference, data); err != nil || dryRun {
 		return err
 	}
 	number := t.Published
@@ -929,12 +1012,13 @@ func (s *Server) ExportTemplates(ctx context.Context, _ ExportTemplatesRequestOb
 	if err := zw.Close(); err != nil {
 		return nil, err
 	}
+	signed := s.signZip(ctx, buf.Bytes())
 	me, _ := userFrom(ctx)
 	s.audit(ctx, me.Username, "template.export", "", fmt.Sprintf("%d modèles", len(rows)))
 	name := fmt.Sprintf("docibis-modeles-%s-%s.zip", strings.ToLower(s.cfg.Load().String("instance_name")), time.Now().Format("2006-01-02"))
 	disposition := mime.FormatMediaType("attachment", map[string]string{"filename": name})
 	return ExportTemplates200ApplicationzipResponse{
-		Body: bytes.NewReader(buf.Bytes()), ContentLength: int64(buf.Len()),
+		Body: bytes.NewReader(signed), ContentLength: int64(len(signed)),
 		Headers: ExportTemplates200ResponseHeaders{ContentDisposition: &disposition},
 	}, nil
 }

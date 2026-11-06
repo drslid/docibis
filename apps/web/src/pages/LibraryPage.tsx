@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
 import { keepPreviousData, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, CalendarClock, CircleAlert, CircleCheck, CircleX, Download, FileStack, GitCompare, Plus, Rocket, Sparkles, Trash2, Undo2, Upload, X, Zap } from 'lucide-react'
+import { ArrowLeft, CalendarClock, CircleAlert, CircleCheck, CircleX, Download, Eye, FileStack, GitCompare, Plus, Rocket, Sparkles, Trash2, Undo2, Upload, X, Zap } from 'lucide-react'
 import {
   getGetTemplateQueryKey, getListTemplatesQueryKey, useAddTemplateVersion, useCheckAllTemplates, useCheckTemplateVersion, useCreateTemplate,
   useDeleteTemplate, useGetTemplate, useImportTemplates, useListTemplates, useListTemplateUses, usePublishTemplate, useScheduleTemplate,
@@ -17,6 +17,7 @@ import { HelpTip } from '@/components/help/HelpTip'
 import { TagCheatSheet } from '@/components/help/TagCheatSheet'
 import { CompareVersions } from '@/components/library/CompareVersions'
 import { FastPanel } from '@/components/library/FastPanel'
+import { ImportSummary } from '@/components/library/ImportSummary'
 import { LintBadge, LintList } from '@/components/library/LintList'
 import { NamesPanel } from '@/components/library/NamesPanel'
 import { NativePanel } from '@/components/library/NativePanel'
@@ -118,36 +119,36 @@ function ImportTemplates({ onDone }: { onDone: () => void }) {
   const { t } = useI18n()
   const [file, setFile] = useState<File>()
   const [publish, setPublish] = useState(true)
+  const preview = useImportTemplates()
   const run = useImportTemplates({ mutation: { onSuccess: onDone } })
-  const report = run.data
+  const pick = (f?: File) => { setFile(f); preview.reset(); run.reset() }
 
+  // First what the zip would change, then the import itself.
   return (
     <form
-      onSubmit={(e) => { e.preventDefault(); if (file) run.mutate({ data: { file, publish } }) }}
+      onSubmit={(e) => { e.preventDefault(); if (file) { run.reset(); preview.mutate({ data: { file, publish, dryRun: true } }) } }}
       className="card mb-6 space-y-4"
     >
       <div>
         <label className="label" htmlFor="lib-zip">{t('lib.zip')} <HelpTip>{t('tip.zip')}</HelpTip></label>
-        <input id="lib-zip" type="file" accept=".zip" className="input" onChange={(e) => setFile(e.target.files?.[0])} />
+        <input id="lib-zip" type="file" accept=".zip" className="input" onChange={(e) => pick(e.target.files?.[0])} />
         <p className="text-xs text-gray-400 mt-1">{t('lib.zipHint')}</p>
       </div>
       <div className="flex flex-wrap items-center gap-4">
-        <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={publish} onChange={(e) => setPublish(e.target.checked)} /> {t('lib.publishNow')}</label>
-        <button className="btn-primary inline-flex items-center gap-2 ml-auto" disabled={!file || run.isPending}><Upload className="w-4 h-4" /> {t('lib.import')}</button>
+        <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={publish} onChange={(e) => { setPublish(e.target.checked); preview.reset() }} /> {t('lib.publishNow')}</label>
+        <button className="btn-secondary inline-flex items-center gap-2 ml-auto" disabled={!file || preview.isPending}><Eye className="w-4 h-4" /> {t('import.preview')}</button>
       </div>
-      {run.error && <p className="text-sm text-red-700 dark:text-red-400" role="alert">{message(run.error)}</p>}
-      {report && (
-        <div className="text-sm" aria-live="polite">
-          <p className="font-medium">{t('lib.importReport', { created: report.created, updated: report.updated, unchanged: report.unchanged, references: report.references })}</p>
-          {!!report.aliases && <p>{t('lib.importAliases', { n: report.aliases })}</p>}
-          {report.errors.length > 0 && (
-            <>
-              <p className="text-red-700 dark:text-red-400 mt-2">{t('lib.importErrors')}</p>
-              <ul className="list-disc pl-5 text-red-700 dark:text-red-400">{report.errors.map((e) => <li key={e}>{e}</li>)}</ul>
-            </>
-          )}
-        </div>
+      {preview.error && <p className="text-sm text-red-700 dark:text-red-400" role="alert">{message(preview.error)}</p>}
+      {preview.data && !run.data && (
+        <>
+          <ImportSummary report={preview.data} />
+          <button type="button" className="btn-primary inline-flex items-center gap-2" disabled={!file || run.isPending} onClick={() => file && run.mutate({ data: { file, publish } })}>
+            <Upload className="w-4 h-4" /> {t('import.confirm')}
+          </button>
+        </>
       )}
+      {run.error && <p className="text-sm text-red-700 dark:text-red-400" role="alert">{message(run.error)}</p>}
+      {run.data && <ImportSummary report={run.data} />}
     </form>
   )
 }

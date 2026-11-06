@@ -1148,6 +1148,8 @@ export interface TemplateImport {
   /** Zip des modèles */
   file: Blob | File;
   publish?: boolean;
+  /** Aperçu seulement, rien n'est enregistré (signature, modèles créés, mis à jour ou inchangés) */
+  dryRun?: boolean;
 }
 
 export interface FontUpload {
@@ -1204,6 +1206,59 @@ export interface TemplateUpdate {
   dataCheck?: TemplateUpdateDataCheck;
 }
 
+/**
+ * trusted, signé par cette instance ou une instance de confiance ; untrusted, signé par une clé inconnue ; unsigned, sans signature
+ */
+export type ImportSignatureStatus = typeof ImportSignatureStatus[keyof typeof ImportSignatureStatus];
+
+
+export const ImportSignatureStatus = {
+  trusted: 'trusted',
+  untrusted: 'untrusted',
+  unsigned: 'unsigned',
+} as const;
+
+/**
+ * Signature du zip ; un zip modifié après son export est refusé
+ */
+export interface ImportSignature {
+  /** trusted, signé par cette instance ou une instance de confiance ; untrusted, signé par une clé inconnue ; unsigned, sans signature */
+  status: ImportSignatureStatus;
+  /** Nom de l'instance qui a signé, donné par elle */
+  instance?: string;
+  /** Nom de l'instance de confiance qui correspond à la clé */
+  signer?: string;
+  publicKey?: string;
+  signedAt?: string;
+}
+
+/**
+ * created, nouveau modèle ; updated, nouvelle version ou publication ; unchanged ; failed
+ */
+export type ImportItemAction = typeof ImportItemAction[keyof typeof ImportItemAction];
+
+
+export const ImportItemAction = {
+  created: 'created',
+  updated: 'updated',
+  unchanged: 'unchanged',
+  failed: 'failed',
+} as const;
+
+export interface ImportItem {
+  path: string;
+  /** created, nouveau modèle ; updated, nouvelle version ou publication ; unchanged ; failed */
+  action: ImportItemAction;
+  /** Avec son PDF de référence */
+  reference?: boolean;
+  /** Avec sa copie Typst */
+  native?: boolean;
+  /** Anciens noms ajoutés */
+  aliases?: number;
+  /** L'erreur, pour failed */
+  detail?: string;
+}
+
 export interface ImportReport {
   created: number;
   updated: number;
@@ -1214,6 +1269,17 @@ export interface ImportReport {
   /** Anciens noms ajoutés (X.docx.aliases.txt, un par ligne) */
   aliases?: number;
   errors: string[];
+  /** Aperçu, rien n'a été enregistré */
+  dryRun?: boolean;
+  signature?: ImportSignature;
+  /** Ce qui arrive à chaque modèle du zip */
+  items?: ImportItem[];
+}
+
+export interface SigningKey {
+  instance: string;
+  /** Clé publique qui signe les exports et les envois de cette instance (ed25519:…) */
+  publicKey: string;
 }
 
 export interface Release {
@@ -6903,6 +6969,9 @@ formData.append(`file`, templateImport.file);
 if(templateImport.publish !== undefined) {
  formData.append(`publish`, templateImport.publish.toString())
  }
+if(templateImport.dryRun !== undefined) {
+ formData.append(`dryRun`, templateImport.dryRun.toString())
+ }
 
   return apiFetch<ImportReport>(getImportTemplatesUrl(),
   {
@@ -11034,6 +11103,107 @@ export const usePromoteTemplate = <TError = ErrorType<BadRequestResponse | Unaut
       > => {
       return useMutation(getPromoteTemplateMutationOptions(options), queryClient);
     }
+
+export const getGetSigningKeyUrl = () => {
+
+
+
+
+  return `/api/signing-key`
+}
+
+/**
+ * @summary Clé publique de cette instance, à déclarer dans les instances qui reçoivent ses modèles
+ */
+export const getSigningKey = async ( options?: Parameters<typeof apiFetch>[1]): Promise<SigningKey> => {
+
+  return apiFetch<SigningKey>(getGetSigningKeyUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetSigningKeyQueryKey = () => {
+    return [
+    `/api/signing-key`
+    ] as const;
+    }
+
+
+export const getGetSigningKeyQueryOptions = <TData = Awaited<ReturnType<typeof getSigningKey>>, TError = ErrorType<UnauthorizedResponse>>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getSigningKey>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetSigningKeyQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getSigningKey>>> = ({ signal }) => getSigningKey({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getSigningKey>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetSigningKeyQueryResult = NonNullable<Awaited<ReturnType<typeof getSigningKey>>>
+export type GetSigningKeyQueryError = ErrorType<UnauthorizedResponse>
+
+
+export function useGetSigningKey<TData = Awaited<ReturnType<typeof getSigningKey>>, TError = ErrorType<UnauthorizedResponse>>(
+  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getSigningKey>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getSigningKey>>,
+          TError,
+          Awaited<ReturnType<typeof getSigningKey>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetSigningKey<TData = Awaited<ReturnType<typeof getSigningKey>>, TError = ErrorType<UnauthorizedResponse>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getSigningKey>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getSigningKey>>,
+          TError,
+          Awaited<ReturnType<typeof getSigningKey>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetSigningKey<TData = Awaited<ReturnType<typeof getSigningKey>>, TError = ErrorType<UnauthorizedResponse>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getSigningKey>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Clé publique de cette instance, à déclarer dans les instances qui reçoivent ses modèles
+ */
+
+export function useGetSigningKey<TData = Awaited<ReturnType<typeof getSigningKey>>, TError = ErrorType<UnauthorizedResponse>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getSigningKey>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetSigningKeyQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getListEnvironmentsUrl = () => {
 
