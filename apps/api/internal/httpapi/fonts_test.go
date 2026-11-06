@@ -80,6 +80,16 @@ func TestFonts(t *testing.T) {
 	for _, k := range []string{"FONTCONFIG_FILE", fontsAddedEnv} {
 		t.Setenv(k, os.Getenv(k))
 	}
+	// A font in the home folder: the checks run even where the system has none (CI).
+	home := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(home, ".fonts"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(home, ".fonts", "base.ttf"), testFont("Base Test", "Regular"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("HOME", home)
+	forgetInstalledFonts()
 	srv, setup := open(t, nil)
 	srv.SetRenderer(&fakeRenderer{})
 	t.Cleanup(func() {
