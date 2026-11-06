@@ -13,6 +13,7 @@ import (
 	"log/slog"
 	"os/exec"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 )
@@ -49,6 +50,8 @@ type Pool struct {
 	wg      sync.WaitGroup
 	mu      sync.Mutex
 	workers map[*worker]bool
+	// gen counts the recycles: a worker of an older one is replaced.
+	gen atomic.Int64
 }
 
 // Start launches the workers and returns once they are all ready.
@@ -149,7 +152,27 @@ func (p *Pool) take(ctx context.Context) (*worker, error) {
 			p.retire(w, true)
 			p.replace()
 		default:
+			if w.gen != p.gen.Load() {
+				p.retire(w, false)
+				p.replace()
+				continue
+			}
 			return w, nil
+		}
+	}
+}
+
+// Recycle replaces every worker, the busy ones once done: a new process
+// sees the fonts installed meanwhile.
+func (p *Pool) Recycle() {
+	p.gen.Add(1)
+	for {
+		select {
+		case w := <-p.idle:
+			p.retire(w, false)
+			p.replace()
+		default:
+			return
 		}
 	}
 }
@@ -165,7 +188,7 @@ func (p *Pool) convert(w *worker, req Request) (time.Duration, error) {
 		p.retire(w, true)
 		p.replace()
 		return 0, err
-	case p.opts.RecycleAfter > 0 && w.next >= p.opts.RecycleAfter:
+	case p.opts.RecycleAfter > 0 && w.next >= p.opts.RecycleAfter, w.gen != p.gen.Load():
 		p.retire(w, false)
 		p.replace()
 	case reply.Error != "" && w.stopsAfterError():
@@ -242,9 +265,11 @@ type worker struct {
 	replies chan Reply
 	exited  chan struct{}
 	next    int
+	gen     int64
 }
 
 func (p *Pool) spawn(ctx context.Context) (*worker, error) {
+	gen := p.gen.Load()
 	cmd := exec.Command(p.opts.Command[0], p.opts.Command[1:]...)
 	cmd.Env = append(cmd.Environ(), p.opts.Env...)
 	// The worker leads a process group with its LibreOffice: stopping the
@@ -265,7 +290,7 @@ func (p *Pool) spawn(ctx context.Context) (*worker, error) {
 	if err := cmd.Start(); err != nil {
 		return nil, fmt.Errorf("start worker: %w", err)
 	}
-	w := &worker{cmd: cmd, stdin: stdin, replies: make(chan Reply, 1), exited: make(chan struct{})}
+	w := &worker{cmd: cmd, stdin: stdin, replies: make(chan Reply, 1), exited: make(chan struct{}), gen: gen}
 	go func() {
 		lines := bufio.NewScanner(stderr)
 		for lines.Scan() {

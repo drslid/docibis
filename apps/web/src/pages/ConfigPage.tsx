@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from 'react'
+import { useMemo, useState } from 'react'
 import { Navigate, NavLink, useParams } from 'react-router'
 import { useQueryClient } from '@tanstack/react-query'
 import {
@@ -19,6 +19,7 @@ import {
   ShieldCheck,
   SlidersHorizontal,
   Trash2,
+  Type,
   Undo2,
   Webhook,
   Zap,
@@ -39,6 +40,8 @@ import {
   type Setting,
 } from '@/api/generated/docibis'
 import { LoadingSpinner } from '@/components/common/LoadingSpinner'
+import { SettingsCard } from '@/components/common/SettingsCard'
+import { FontsSection } from '@/components/config/FontsSection'
 import { BrandLogo, companyLogoURL } from '@/components/layout/BrandLogo'
 import { PageTitle } from '@/components/layout/PageTitle'
 import { useI18n, type Key } from '@/i18n/useI18n'
@@ -62,19 +65,6 @@ const GROUPS: Record<string, { icon: LucideIcon; colour: string }> = {
   history: { icon: History, colour: 'text-violet-500' },
   security: { icon: ShieldCheck, colour: 'text-rose-500' },
   logs: { icon: ScrollText, colour: 'text-slate-500' },
-}
-
-/** A titled block of settings. */
-export function SettingsCard({ title, actions, children }: { title: string; actions?: ReactNode; children: ReactNode }) {
-  return (
-    <section className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm">
-      <header className="flex flex-wrap items-center gap-2 px-5 py-3.5 border-b border-gray-200 dark:border-gray-700">
-        <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100">{title}</h2>
-        {actions && <div className="ml-auto flex flex-wrap items-center gap-2">{actions}</div>}
-      </header>
-      <div className="p-5 text-sm text-gray-700 dark:text-gray-300">{children}</div>
-    </section>
-  )
 }
 
 function Input({ setting, value, onChange }: { setting: Setting; value: string; onChange: (v: string) => void }) {
@@ -289,6 +279,7 @@ export function ConfigPage() {
   const sections = [
     ...data.groups.map((g) => ({ id: g.id, label: g.label, ...(GROUPS[g.id] ?? { icon: SlidersHorizontal, colour: 'text-gray-500' }) })),
     { id: 'apparence', label: t('config.branding'), icon: Palette, colour: 'text-pink-500' },
+    { id: 'polices', label: t('fonts.title'), icon: Type, colour: 'text-lime-600' },
     { id: 'environnements', label: t('envs.title'), icon: Send, colour: 'text-fuchsia-500' },
     { id: 'demarrage', label: t('config.startup'), icon: Server, colour: 'text-slate-500' },
   ]
@@ -352,6 +343,8 @@ export function ConfigPage() {
           )}
 
           {active.id === 'apparence' && <BrandingSection />}
+
+          {active.id === 'polices' && <FontsSection />}
 
           {active.id === 'environnements' && <EnvironmentsSection />}
 

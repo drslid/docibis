@@ -39,6 +39,7 @@ type Server struct {
 	images   imageCache
 	system   systemSampler
 	overlays overlayCache
+	fonts    fontState
 	// native runs the Typst copies (nil until its workers are warm).
 	native      atomic.Pointer[nativeBox]
 	nativeFiles nativeFiles

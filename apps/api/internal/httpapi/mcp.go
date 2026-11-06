@@ -49,7 +49,7 @@ type renderInput struct {
 	FileName     string         `json:"file_name,omitempty" jsonschema:"nom du fichier du modèle, pour l'historique (modele.docx par défaut)"`
 	TemplateName string         `json:"template_name,omitempty" jsonschema:"chemin d'un modèle de la bibliothèque (voir docibis_list_templates) ; sa version publiée est utilisée"`
 	Data         map[string]any `json:"data" jsonschema:"les données JSON du document : un objet dont les clés sont les balises du modèle"`
-	Format       string         `json:"format,omitempty" jsonschema:"pdf (par défaut) ou docx"`
+	Format       string         `json:"format,omitempty" jsonschema:"pdf (par défaut), docx, doc, odt, rtf, html ou txt"`
 	Watermark    string         `json:"watermark,omitempty" jsonschema:"filigrane du PDF (texte) ; none pour aucun ; par défaut celui de la configuration"`
 	Pdfa         string         `json:"pdfa,omitempty" jsonschema:"none, PDF/A-1b, PDF/A-2b ou PDF/A-3b ; par défaut celui de la configuration"`
 	Accessible   *bool          `json:"accessible,omitempty" jsonschema:"PDF balisé pour l'accessibilité (PDF/UA)"`
@@ -249,10 +249,7 @@ func (s *Server) mcpServer() *mcp.Server {
 			return toolError(errors.New(trimmed(p.Detail))), nil, nil
 		}
 		name := doc.fileName()
-		mime := "application/pdf"
-		if doc.format == "docx" {
-			mime = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-		}
+		mime, _, _ := strings.Cut(contentType(doc.format), ";")
 		return &mcp.CallToolResult{Content: []mcp.Content{
 			&mcp.TextContent{Text: fmt.Sprintf("%s produit : %d octets en %d ms.", name, len(doc.content), ms(time.Since(start)))},
 			&mcp.EmbeddedResource{Resource: &mcp.ResourceContents{URI: "docibis://documents/" + name, MIMEType: mime, Blob: doc.content}},

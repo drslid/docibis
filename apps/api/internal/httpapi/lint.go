@@ -1,36 +1,11 @@
 package httpapi
 
 import (
-	"context"
 	"encoding/json"
-	"os/exec"
 	"strings"
-	"sync"
-	"time"
 
 	"docibis/internal/merge"
 )
-
-// installedFonts lists, once, the font families LibreOffice can use here
-// (fc-list), in lower case. Empty when fc-list is missing: fonts are then
-// not checked.
-var installedFonts = sync.OnceValue(func() map[string]bool {
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-	defer cancel()
-	out, err := exec.CommandContext(ctx, "fc-list", ":", "family").Output()
-	if err != nil {
-		return nil
-	}
-	fonts := map[string]bool{}
-	for _, line := range strings.Split(string(out), "\n") {
-		for _, name := range strings.Split(line, ",") {
-			if name = strings.ToLower(strings.TrimSpace(name)); name != "" {
-				fonts[name] = true
-			}
-		}
-	}
-	return fonts
-})
 
 // lintOptions tells the checks what this server offers.
 func lintOptions() merge.LintOptions {
@@ -38,7 +13,15 @@ func lintOptions() merge.LintOptions {
 	if len(fonts) == 0 {
 		return merge.LintOptions{}
 	}
-	return merge.LintOptions{Font: func(family string) bool { return fonts[strings.ToLower(strings.TrimSpace(family))] }}
+	return merge.LintOptions{Font: fontInstalled(fonts)}
+}
+
+// fontInstalled tells whether a family is among fonts, by lower-case name.
+func fontInstalled(fonts map[string]string) func(string) bool {
+	return func(family string) bool {
+		_, ok := fonts[strings.ToLower(strings.TrimSpace(family))]
+		return ok
+	}
 }
 
 // lintTemplate checks a template prepared as ODT and returns the checks as

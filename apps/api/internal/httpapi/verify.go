@@ -36,6 +36,8 @@ const (
 	checkRadius     = 2
 	checkMaxPages   = 200
 	checkVersionKey = "check.version"
+	// lintVersionKey is the version that last checked the templates.
+	lintVersionKey = "lint.version"
 )
 
 // checkVersion produces a version with the data of its reference, compares
@@ -283,6 +285,22 @@ func (s *Server) checkAll(ctx context.Context) (int, error) {
 	return len(versions), nil
 }
 
+// resetLint checks every template again after a new version of DocIbis:
+// its checks, or the fonts of the server, may have changed.
+func (s *Server) resetLint(ctx context.Context, st *store.Store) {
+	last, _, err := st.Setting(ctx, lintVersionKey)
+	if err != nil || last == version.Version {
+		return
+	}
+	if err := st.ResetLint(ctx); err != nil {
+		s.logger.Warn("templates not checked again", "error", err)
+		return
+	}
+	if err := st.SetSetting(ctx, lintVersionKey, version.Version); err != nil {
+		s.logger.Warn("cannot record the version checked", "error", err)
+	}
+}
+
 // Maintain runs once the engine is ready: it reads the templates imported
 // in bulk, then compares every reference again after a new version of
 // DocIbis.
@@ -295,6 +313,7 @@ func (s *Server) Maintain(ctx context.Context) {
 	if version.Version != "dev" {
 		s.resetFast(ctx, st)
 		s.resetNative(ctx, st)
+		s.resetLint(ctx, st)
 	}
 	s.describeLater(ctx)
 	if version.Version == "dev" {

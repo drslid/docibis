@@ -66,6 +66,8 @@ func bodyLimit(template, data int, method, p string) int {
 		return data + 1
 	case p == "/api/templates/import", p == "/v1/templates/import":
 		return maxImportMB + 1
+	case p == "/api/fonts" && method == http.MethodPost:
+		return maxFontMB + 1
 	case strings.HasPrefix(p, "/v1/bundles/"), strings.HasPrefix(p, "/api/bundles"):
 		return data + 1
 	case strings.HasPrefix(p, "/api/templates") && method != http.MethodGet && method != http.MethodHead:
@@ -532,12 +534,12 @@ func (s *Server) TryAnalyze(ctx context.Context, req TryAnalyzeRequestObject) (T
 
 func (s *Server) TryRender(ctx context.Context, req TryRenderRequestObject) (TryRenderResponseObject, error) {
 	start := time.Now()
-	doc, err := s.produce(ctx, req.Body, "pdf")
+	doc, err := s.produce(ctx, req.Body, "")
 	me, _ := userFrom(ctx)
 	s.record(ctx, "console", me.Username, doc, err, time.Since(start))
 	if err == nil {
 		out := TryResult{
-			Pdf: doc.content, Size: len(doc.content), Engine: TryResultEngine(doc.engineName()),
+			Pdf: doc.content, Format: doc.format, Size: len(doc.content), Engine: TryResultEngine(doc.engineName()),
 			PrepareMs: ms(doc.prepare), MergeMs: ms(doc.merge), RenderMs: ms(doc.render), TotalMs: ms(time.Since(start)),
 		}
 		return TryRender200JSONResponse(out), nil
@@ -645,8 +647,8 @@ func (s *Server) produceDocument(ctx context.Context, f tryForm, format string) 
 	if doc.format == "" {
 		doc.format = "pdf"
 	}
-	if doc.format != "pdf" && doc.format != "docx" {
-		return doc, refuse("Format inconnu : %q. Formats possibles : pdf, docx.", doc.format)
+	if doc.format, err = outputFormat(doc.format); err != nil {
+		return doc, err
 	}
 	if err := f.opts.resolve(); err != nil {
 		return doc, err
@@ -656,7 +658,7 @@ func (s *Server) produceDocument(ctx context.Context, f tryForm, format string) 
 	if !f.hasData || json.Unmarshal(f.data, &root) != nil {
 		return doc, refuse("Les données doivent être un objet JSON valide, par exemple { \"nom\": \"Dupont\" }.")
 	}
-	if odt, err = s.includeBlocks(ctx, odt); err != nil {
+	if odt, err = s.includeBlocks(ctx, odt, root); err != nil {
 		return doc, err
 	}
 	if doc.missing, err = s.checkData(f, odt, root); err != nil {

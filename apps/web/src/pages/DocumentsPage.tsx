@@ -165,6 +165,11 @@ export function DocumentsPage() {
             <option value="">{t('history.allFormats')}</option>
             <option value="pdf">PDF</option>
             <option value="docx">Word</option>
+            <option value="doc">Word 97</option>
+            <option value="odt">ODT</option>
+            <option value="rtf">RTF</option>
+            <option value="html">HTML</option>
+            <option value="txt">{t('history.text')}</option>
           </Select>
           <ResetFilters
             show={filtered}

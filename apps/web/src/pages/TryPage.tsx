@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type DragEvent } from 'react'
 import { Link } from 'react-router'
 import { Code2, Download, ExternalLink, FileStack, FileText, Loader2, RotateCcw, Upload, Zap } from 'lucide-react'
 import {
-  getTemplate, useListTemplates, useTryAnalyze, useTryRender, type LibraryTemplate, type TryRenderForm, type TryRenderFormPdfa, type TryResult, type TryTemplate,
+  getTemplate, useListTemplates, useTryAnalyze, useTryRender, type LibraryTemplate, type TryRenderForm, type TryRenderFormFormat, type TryRenderFormPdfa, type TryResult, type TryTemplate,
 } from '@/api/generated/docibis'
 import { ApiError } from '@/api/fetcher'
 import { PageTitle } from '@/components/layout/PageTitle'
@@ -10,6 +10,7 @@ import { HelpTip } from '@/components/help/HelpTip'
 import { TagCheatSheet } from '@/components/help/TagCheatSheet'
 import { LintList } from '@/components/library/LintList'
 import { DataForm, type Json } from '@/components/try/DataForm'
+import { FORMATS, NO_PDF_SETTINGS, PdfOptions, pdfSettingsForm } from '@/components/try/PdfOptions'
 import { useI18n, type Key } from '@/i18n/useI18n'
 
 const ENGINES: Record<string, { label: Key; fast: boolean }> = {
@@ -23,9 +24,10 @@ function message(error: unknown) {
   return error instanceof Error ? error.message : String(error)
 }
 
-function pdfURL(result: TryResult) {
+function documentURL(result: TryResult) {
   const bytes = Uint8Array.from(atob(result.pdf), (c) => c.charCodeAt(0))
-  return URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }))
+  const mime = FORMATS.find((f) => f.value === result.format)?.mime ?? 'application/pdf'
+  return URL.createObjectURL(new Blob([bytes], { type: mime }))
 }
 
 export function TryPage() {
@@ -41,6 +43,8 @@ export function TryPage() {
   const [watermark, setWatermark] = useState('')
   const [colour, setColour] = useState('#c0c0c0')
   const [tiled, setTiled] = useState(false)
+  const [format, setFormat] = useState('pdf')
+  const [pdfSettings, setPdfSettings] = useState(NO_PDF_SETTINGS)
   const [mode, setMode] = useState<'form' | 'json'>('form')
   const [live, setLive] = useState(true)
   const input = useRef<HTMLInputElement>(null)
@@ -89,13 +93,17 @@ export function TryPage() {
   function produce() {
     const source = library ? { templateName: library.path } : file ? { template: file } : undefined
     if (!source) return
-    const options: Partial<TryRenderForm> = {
+    const options: Partial<TryRenderForm> = format !== 'pdf' ? {
+      format: format as TryRenderFormFormat,
+      ...(devMode && { devMode: true }),
+    } : {
       ...(pdfa && { pdfa: pdfa as TryRenderFormPdfa }),
       ...(accessible && { accessible: true }),
       ...(devMode && { devMode: true }),
       ...(watermark.trim() && { watermark: watermark.trim(), watermarkColor: colour, ...(tiled && { watermarkTiled: true }) }),
+      ...pdfSettingsForm(pdfSettings),
     }
-    render.mutate({ data: { ...source, ...options, data } }, { onSuccess: (result) => setPdf({ url: pdfURL(result), result }) })
+    render.mutate({ data: { ...source, ...options, data } }, { onSuccess: (result) => setPdf({ url: documentURL(result), result }) })
   }
 
   // Live preview: the document is produced again a moment after each change.
@@ -108,7 +116,7 @@ export function TryPage() {
     if (!live || !ready) return
     const timer = setTimeout(() => latest.current(), 900)
     return () => clearTimeout(timer)
-  }, [live, ready, data, pdfa, accessible, devMode, watermark, colour, tiled])
+  }, [live, ready, data, pdfa, accessible, devMode, watermark, colour, tiled, format, pdfSettings])
 
   function drop(e: DragEvent) {
     e.preventDefault()
@@ -118,7 +126,8 @@ export function TryPage() {
   }
 
   const engine = template ? ENGINES[template.analysis.engine] : undefined
-  const pdfName = ((library ? library.path.split('/').pop() : file?.name) ?? 'document').replace(/\.(docx|odt)$/i, '') + '.pdf'
+  const baseName = ((library ? library.path.split('/').pop() : file?.name) ?? 'document').replace(/\.(docx|odt)$/i, '')
+  const shown = pdf?.result.format ?? 'pdf'
 
   return (
     <div>
@@ -246,6 +255,14 @@ export function TryPage() {
             <details className="mt-4">
               <summary className="text-sm font-medium cursor-pointer text-gray-700 dark:text-gray-300">{t('try.options')}</summary>
               <div className="grid gap-3 sm:grid-cols-2 mt-3">
+                <div className="sm:col-span-2">
+                  <label className="label" htmlFor="try-format">{t('try.format')}</label>
+                  <select id="try-format" className="input" value={format} onChange={(e) => setFormat(e.target.value)}>
+                    {FORMATS.map((f) => <option key={f.value} value={f.value}>{f.label || t('history.text')}</option>)}
+                  </select>
+                  {format !== 'pdf' && <p className="text-xs text-gray-400 mt-1">{t('try.pdfOnly')}</p>}
+                </div>
+                <fieldset className="contents" disabled={format !== 'pdf'}>
                 <div>
                   <label className="label" htmlFor="try-pdfa">{t('try.pdfa')} <HelpTip>{t('tip.pdfa')}</HelpTip></label>
                   <select id="try-pdfa" className="input" value={pdfa} onChange={(e) => setPdfa(e.target.value)}>
@@ -270,6 +287,8 @@ export function TryPage() {
                   <label className="flex items-center gap-2 text-sm pb-2"><input type="checkbox" checked={tiled} onChange={(e) => setTiled(e.target.checked)} /> {t('try.watermarkTiled')}</label>
                 </div>
                 <p className="sm:col-span-2 text-xs text-gray-400">{t('try.watermarkHint')}</p>
+                <PdfOptions value={pdfSettings} onChange={setPdfSettings} />
+                </fieldset>
               </div>
             </details>
             <div className="flex flex-wrap items-center gap-3 mt-4">
@@ -277,7 +296,7 @@ export function TryPage() {
                 <input type="checkbox" checked={live} onChange={(e) => setLive(e.target.checked)} /> {t('try.live')}
               </label>
               <button className="btn-primary flex-1 inline-flex items-center justify-center gap-2" disabled={!(template || library) || !!dataError || render.isPending} onClick={produce}>
-                {render.isPending && <Loader2 className="w-4 h-4 animate-spin" />} {t('try.produce')}
+                {render.isPending && <Loader2 className="w-4 h-4 animate-spin" />} {t(format === 'pdf' ? 'try.produce' : 'try.produceDoc')}
               </button>
             </div>
           </section>
@@ -290,16 +309,22 @@ export function TryPage() {
           {pdf ? (
             <>
               <p className="text-sm mb-1">
-                <span className="font-semibold">{t('try.producedIn', { ms: pdf.result.totalMs })}</span>
+                <span className="font-semibold">{t(shown === 'pdf' ? 'try.producedIn' : 'try.docProducedIn', { ms: pdf.result.totalMs })}</span>
                 <span className="text-gray-500 dark:text-gray-400"> : {t('try.breakdown', { merge: pdf.result.mergeMs, render: pdf.result.renderMs })}{pdf.result.prepareMs > 0 && ` · ${t('try.preparation', { ms: pdf.result.prepareMs })}`}</span>
               </p>
               <p className="text-xs text-gray-400 mb-3">{t('try.size', { kb: Math.ceil(pdf.result.size / 1024) })}</p>
               <div className="flex gap-2 mb-4">
-                <a className="btn-secondary inline-flex items-center gap-2 text-sm" href={pdf.url} download={pdfName}><Download className="w-4 h-4" /> {t('try.download')}</a>
-                <a className="btn-ghost inline-flex items-center gap-2 text-sm" href={pdf.url} target="_blank" rel="noreferrer"><ExternalLink className="w-4 h-4" /> {t('try.openTab')}</a>
+                <a className="btn-secondary inline-flex items-center gap-2 text-sm" href={pdf.url} download={`${baseName}.${shown}`}><Download className="w-4 h-4" /> {t('try.download')}</a>
+                {['pdf', 'txt'].includes(shown) && (
+                  <a className="btn-ghost inline-flex items-center gap-2 text-sm" href={pdf.url} target="_blank" rel="noreferrer"><ExternalLink className="w-4 h-4" /> {t('try.openTab')}</a>
+                )}
                 <Link className="btn-ghost inline-flex items-center gap-2 text-sm ml-auto" to="/developpeurs"><Code2 className="w-4 h-4" /> {t('try.byApi')}</Link>
               </div>
-              <iframe title={t('try.preview')} src={pdf.url} className="w-full flex-1 min-h-[32rem] rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-100" />
+              {['pdf', 'html', 'txt'].includes(shown) ? (
+                <iframe title={t('try.preview')} src={pdf.url} sandbox={shown === 'pdf' ? undefined : ''} className="w-full flex-1 min-h-[32rem] rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-100" />
+              ) : (
+                <p className="text-sm text-gray-500 dark:text-gray-400">{t('try.noPreview')}</p>
+              )}
             </>
           ) : (
             !render.error && (

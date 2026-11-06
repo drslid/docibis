@@ -29,6 +29,21 @@ var substitutes = map[string]string{
 	"times new roman": "Liberation Serif", "times": "Liberation Serif", "courier new": "Liberation Mono", "arial narrow": "Liberation Sans Narrow",
 }
 
+// FontCheck tells whether a font family a template uses is missing here
+// (installed says what is), and the free font of the same dimensions
+// LibreOffice then draws with, if any. Symbol fonts never miss: their
+// characters are drawn in Unicode.
+func FontCheck(family string, installed func(string) bool) (missing bool, substitute string) {
+	lower := strings.ToLower(family)
+	if installed(family) || strings.HasPrefix(lower, "wingdings") || lower == "symbol" || lower == "opensymbol" {
+		return false, ""
+	}
+	if sub, ok := substitutes[lower]; ok && installed(sub) {
+		return true, sub
+	}
+	return true, ""
+}
+
 // Lint checks a template prepared as ODT: tags left open, sections and
 // repeats not closed, expressions that cannot be read, image placeholders
 // without an image, tracked changes, comments and missing fonts.
@@ -70,15 +85,13 @@ func Lint(template []byte, o LintOptions) ([]Issue, error) {
 	}
 	if o.Font != nil {
 		for _, family := range usedFonts(trees) {
-			lower := strings.ToLower(family)
-			if o.Font(family) || strings.HasPrefix(lower, "wingdings") || lower == "symbol" || lower == "opensymbol" {
-				continue
-			}
-			if sub, ok := substitutes[lower]; ok && o.Font(sub) {
+			switch missing, sub := FontCheck(family, o.Font); {
+			case !missing:
+			case sub != "":
 				add("info", "font-substituted", "Police « %s » remplacée par %s, de mêmes dimensions : la mise en page ne change pas.", family, sub)
-				continue
+			default:
+				add("warning", "font-missing", "Police « %s » absente du serveur : LibreOffice en prend une autre et la mise en page peut changer (lignes, pages). Demandez son ajout ou changez de police.", family)
 			}
-			add("warning", "font-missing", "Police « %s » absente du serveur : LibreOffice en prend une autre et la mise en page peut changer (lignes, pages). Demandez son ajout ou changez de police.", family)
 		}
 	}
 	order := map[string]int{"error": 0, "warning": 1, "info": 2}
@@ -141,6 +154,7 @@ func lintTags(tree *node, add func(level, code, format string, args ...any)) int
 			}
 		case strings.HasPrefix(tag, "rs_"):
 			stack = append(stack, opened{o, "rs"})
+			lintModifiers(strings.TrimPrefix(tag, "rs_"), tag, add)
 		case tag == "else" || strings.HasPrefix(tag, "else_"):
 			if len(stack) == 0 || stack[len(stack)-1].kind != "cs" {
 				add("error", "else-alone", "« <<%s>> » hors d'une section « <<cs_\u2026>> ».", short(tag))
@@ -157,7 +171,7 @@ func lintTags(tree *node, add func(level, code, format string, args ...any)) int
 			stack = stack[:len(stack)-1]
 			name := strings.TrimPrefix(tag, "es_")
 			if top.kind == "rs" {
-				if want := strings.TrimPrefix(top.o.tag, "rs_"); name != "" && name != want {
+				if want := strings.TrimPrefix(top.o.tag, "rs_"); name != "" && name != want && name != listPath(want) {
 					add("warning", "end-name", "« <<%s>> » ferme « <<%s>> » : vérifiez l'ordre des balises.", tag, top.o.tag)
 				}
 				if top.o.para != o.para {
@@ -168,6 +182,7 @@ func lintTags(tree *node, add func(level, code, format string, args ...any)) int
 			}
 		case strings.HasPrefix(tag, "rr_"):
 			name := strings.TrimPrefix(tag, "rr_")
+			lintModifiers(name, tag, add)
 			row := o.para.ancestor("table:table-row")
 			if row == nil {
 				add("error", "row-outside", "« <<%s>> » doit être dans une ligne de tableau.", tag)
@@ -175,7 +190,7 @@ func lintTags(tree *node, add func(level, code, format string, args ...any)) int
 			}
 			found := false
 			for n := row; n != nil && !found; {
-				found = hasTag(n, "er_"+name)
+				found = hasTag(n, "er_"+name) || hasTag(n, "er_"+listPath(name))
 				i := n.index() + 1
 				if i >= len(n.parent.children) {
 					break
@@ -199,7 +214,12 @@ func lintTags(tree *node, add func(level, code, format string, args ...any)) int
 		case strings.HasPrefix(tag, "{"):
 			lintExpr(strings.Trim(tag, "{}"), tag, add)
 		case strings.HasPrefix(path, "$"):
-		case strings.HasPrefix(tag, "ref:"):
+		case strings.HasPrefix(tag, "ref:"), strings.HasPrefix(tag, "refLookup:"), strings.HasPrefix(tag, "refLookupOp:"):
+			if t := paragraphText(o.para); !refTag.MatchString(t) && !lookupTag.MatchString(t) {
+				add("error", "ref-alone", "« <<%s>> » doit être seul dans son paragraphe.", short(tag))
+			} else if _, field, _ := strings.Cut(tag, ":"); !strings.HasPrefix(tag, "ref:") && !plainPath.MatchString(strings.TrimSpace(field)) {
+				add("error", "path", "Balise illisible : « <<%s>> » (lettres, chiffres, points et _ seulement après le préfixe).", short(tag))
+			}
 		case strings.HasPrefix(tag, "op:") || strings.HasPrefix(tag, "link:") || strings.HasPrefix(tag, "link_"):
 			if _, rest := fieldPrefix(path); !plainPath.MatchString(rest) {
 				add("error", "path", "Balise illisible : « <<%s>> » (lettres, chiffres, points et _ seulement après le préfixe).", short(tag))
@@ -247,6 +267,22 @@ func lintExpr(src, tag string, add func(level, code, format string, args ...any)
 	}
 	if err != nil {
 		add("error", "expression", "Expression illisible dans « <<%s>> » : %v.", short(tag), err)
+	}
+}
+
+// lintModifiers checks the expressions a repeat filters, sorts or groups on.
+func lintModifiers(name, tag string, add func(level, code, format string, args ...any)) {
+	_, mods := listName(name)
+	for _, m := range mods {
+		if m.kind != "sort" {
+			lintExpr(m.arg, tag, add)
+			continue
+		}
+		for _, part := range strings.Split(m.arg, ",") {
+			if p := strings.TrimSpace(part); p != "" && !strings.EqualFold(p, "ASC") && !strings.EqualFold(p, "DESC") {
+				lintExpr(p, tag, add)
+			}
+		}
 	}
 }
 

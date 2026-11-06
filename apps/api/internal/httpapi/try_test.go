@@ -142,9 +142,12 @@ func TestTry(t *testing.T) {
 
 	code, body, _ = c.upload("/api/try/render", "modele.odt", tpl, map[string]string{"data": `{"name": "Ann & Bob"}`})
 	pdf, _ := base64.StdEncoding.DecodeString(body["pdf"].(string))
-	if code != http.StatusOK || body["engine"] != "standard" || body["size"] != float64(len(pdf)) ||
+	if code != http.StatusOK || body["engine"] != "standard" || body["size"] != float64(len(pdf)) || body["format"] != "pdf" ||
 		!bytes.HasPrefix(pdf, []byte("%PDF")) || !bytes.Contains(pdf, []byte("Bonjour Ann &amp; Bob")) {
 		t.Fatalf("render: %d %v %q", code, body, pdf)
+	}
+	if code, body, _ := c.upload("/api/try/render", "modele.odt", tpl, map[string]string{"data": `{"name": "Ann"}`, "format": "rtf"}); code != http.StatusOK || body["format"] != "rtf" {
+		t.Fatalf("render in another format: %d %v", code, body)
 	}
 	for _, data := range []string{`[1, 2]`, `{oops`, ``} {
 		if code, _, _ := c.upload("/api/try/render", "modele.odt", tpl, map[string]string{"data": data}); code != http.StatusBadRequest {

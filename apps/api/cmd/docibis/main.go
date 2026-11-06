@@ -152,7 +152,12 @@ func serve() int {
 	}
 	api.SetStore(st, cfgs, setup)
 	logger.Info("DocIbis ready", "database", st.Engine(), "replication", st.Replication())
+	// The fonts added are installed before the workers start.
+	if _, err := api.SyncFonts(ctx); err != nil {
+		logger.Error("fonts added not installed: documents use other fonts", "error", err)
+	}
 	stopWorkers := startWorkers(ctx, cfgs, api, logger)
+	go api.WatchFonts(ctx)
 	go api.WatchAlerts(ctx)
 	go api.WatchSchedules(ctx)
 	go api.WatchSystem(ctx)

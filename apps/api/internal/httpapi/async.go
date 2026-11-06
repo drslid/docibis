@@ -44,7 +44,6 @@ const (
 	// silent for staleAfter are failed: it stopped.
 	aliveEvery = 30 * time.Second
 	staleAfter = 2 * time.Minute
-	docxType   = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 )
 
 // hookWaits are the pauses between the attempts of an upload or a callback.
@@ -246,9 +245,9 @@ func (s *Server) submit(ctx context.Context, body *multipart.Reader) (RenderJob,
 	if _, err := checkTemplate(f.name, f.template); err != nil && !isPDF(f.template) && !isTypst(f.name) {
 		return RenderJob{}, err
 	}
-	format := cmp.Or(f.format, "pdf")
-	if format != "pdf" && format != "docx" {
-		return RenderJob{}, refuse("Format inconnu : %q. Formats possibles : pdf, docx.", format)
+	format, err := outputFormat(cmp.Or(f.format, "pdf"))
+	if err != nil {
+		return RenderJob{}, err
 	}
 	opts := f.opts
 	if err := opts.resolve(); err != nil {
@@ -344,12 +343,7 @@ func (s *Server) GetRenderJobDocument(ctx context.Context, req GetRenderJobDocum
 		return conflict("Le document a été déposé à l'adresse uploadUrl : DocIbis ne l'a pas gardé."), nil
 	}
 	disposition := mime.FormatMediaType("attachment", map[string]string{"filename": j.FileName})
-	headers := GetRenderJobDocument200ResponseHeaders{ContentDisposition: &disposition}
-	body, size := bytes.NewReader(j.Document), int64(len(j.Document))
-	if j.Format == "docx" {
-		return GetRenderJobDocument200ApplicationvndOpenxmlformatsOfficedocumentWordprocessingmlDocumentResponse{Body: body, ContentLength: size, Headers: headers}, nil
-	}
-	return GetRenderJobDocument200ApplicationpdfResponse{Body: body, ContentLength: size, Headers: headers}, nil
+	return documentResponse{body: j.Document, format: j.Format, headers: map[string]string{"Content-Disposition": disposition}}, nil
 }
 
 // StartAsync starts the workers of the documents produced in the
@@ -483,10 +477,7 @@ func (s *Server) finish(stop context.Context, job *asyncJob) {
 
 // upload sends the document by PUT to uploadUrl.
 func (s *Server) upload(stop context.Context, address string, doc document) error {
-	kind := "application/pdf"
-	if doc.format == "docx" {
-		kind = docxType
-	}
+	kind := contentType(doc.format)
 	return s.hook(stop, 2*time.Minute, func(ctx context.Context) (*http.Request, error) {
 		req, err := http.NewRequestWithContext(ctx, http.MethodPut, address, bytes.NewReader(doc.content))
 		if err == nil {

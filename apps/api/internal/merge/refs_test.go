@@ -3,7 +3,9 @@ package merge
 import (
 	"archive/zip"
 	"bytes"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -59,7 +61,7 @@ func TestIncludeSharedBlocks(t *testing.T) {
 		}
 		return nil, errors.New("unknown " + name)
 	}
-	out, err := Include(main, read)
+	out, err := Include(main, nil, read)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -89,14 +91,102 @@ func TestIncludeSharedBlocks(t *testing.T) {
 		t.Errorf("filled: %s", got)
 	}
 
-	if same, err := Include(blocks["clauses/signature"], read); err != nil || !bytes.Equal(same, blocks["clauses/signature"]) {
+	if same, err := Include(blocks["clauses/signature"], nil, read); err != nil || !bytes.Equal(same, blocks["clauses/signature"]) {
 		t.Error("a template without blocks is returned as is")
 	}
 	var be *ErrBlock
-	if _, err := Include(odtFile(t, ``, `<text:p>&lt;&lt;ref:boucle&gt;&gt;</text:p>`), read); !errors.As(err, &be) || !strings.Contains(err.Error(), "niveaux") {
+	if _, err := Include(odtFile(t, ``, `<text:p>&lt;&lt;ref:boucle&gt;&gt;</text:p>`), nil, read); !errors.As(err, &be) || !strings.Contains(err.Error(), "niveaux") {
 		t.Errorf("loop: %v", err)
 	}
-	if _, err := Include(odtFile(t, ``, `<text:p>&lt;&lt;ref:absent&gt;&gt;</text:p>`), read); err == nil || !strings.Contains(err.Error(), "unknown absent") {
+	if _, err := Include(odtFile(t, ``, `<text:p>&lt;&lt;ref:absent&gt;&gt;</text:p>`), nil, read); err == nil || !strings.Contains(err.Error(), "unknown absent") {
 		t.Errorf("unknown block: %v", err)
+	}
+}
+
+// shownText is the text of the paragraphs of content, separated by |.
+func shownText(t *testing.T, content string) string {
+	t.Helper()
+	tree, err := parse([]byte(content))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out []string
+	tree.walk(func(n *node) bool {
+		if isParagraph(n) {
+			out = append(out, paragraphText(n))
+			return false
+		}
+		return true
+	})
+	return strings.Join(out, "|")
+}
+
+func TestRefLookup(t *testing.T) {
+	blocks := map[string][]byte{
+		"clauses/vol":      odtFile(t, ``, `<text:p>Clause vol de &lt;&lt;client&gt;&gt;</text:p>`),
+		"clauses/incendie": odtFile(t, ``, `<text:p>Clause incendie</text:p>`),
+	}
+	loaded := []string{}
+	read := func(name string) ([]byte, error) {
+		loaded = append(loaded, name)
+		if b, ok := blocks[name]; ok {
+			return b, nil
+		}
+		return nil, errors.New("unknown " + name)
+	}
+	fill := func(body, data string) (string, error) {
+		var root map[string]any
+		if err := json.Unmarshal([]byte(data), &root); err != nil {
+			t.Fatal(err)
+		}
+		out, err := Include(odtFile(t, ``, body), root, read)
+		if err != nil {
+			return "", err
+		}
+		filled, err := Fill(out, []byte(data), Options{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return shownText(t, zipEntry(t, filled, "content.xml")), nil
+	}
+
+	// The block the data names, filled with the same data.
+	if got, err := fill(`<text:p>Début</text:p><text:p>&lt;&lt;refLookup:clause&gt;&gt;</text:p><text:p>Fin</text:p>`, `{"client": "Dupont", "clause": "clauses/vol"}`); err != nil || got != "Début|Clause vol de Dupont|Fin" {
+		t.Errorf("top level: %q %v", got, err)
+	}
+	// In a repeat, each item names its block; a blank one has none.
+	loaded = nil
+	got, err := fill(`<text:p>&lt;&lt;rs_risques&gt;&gt;</text:p><text:p>&lt;&lt;nom&gt;&gt; :</text:p><text:p>&lt;&lt;refLookupOp:clause&gt;&gt;</text:p><text:p>&lt;&lt;es_risques&gt;&gt;</text:p>`,
+		`{"client": "Dupont", "risques": [{"nom": "A", "clause": "clauses/incendie"}, {"nom": "B", "clause": "clauses/vol"}, {"nom": "C", "clause": ""}, {"nom": "D", "clause": "clauses/incendie"}]}`)
+	if err != nil || got != "A :|Clause incendie|B :|Clause vol de Dupont|C :|D :|Clause incendie" {
+		t.Errorf("repeat: %q %v", got, err)
+	}
+	if strings.Join(loaded, ",") != "clauses/incendie,clauses/vol" {
+		t.Errorf("each block loaded once: %v", loaded)
+	}
+
+	// refLookup needs a name; refLookupOp does without.
+	var be *ErrBlock
+	if _, err := fill(`<text:p>&lt;&lt;refLookup:clause&gt;&gt;</text:p>`, `{"clause": " "}`); !errors.As(err, &be) || !strings.Contains(err.Error(), "refLookupOp:clause") {
+		t.Errorf("strict: %v", err)
+	}
+	if got, err := fill(`<text:p>&lt;&lt;refLookupOp:clause&gt;&gt;</text:p><text:p>Fin</text:p>`, `{}`); err != nil || got != "Fin" {
+		t.Errorf("optional: %q %v", got, err)
+	}
+	if _, err := fill(`<text:p>&lt;&lt;refLookup:clause&gt;&gt;</text:p>`, `{"clause": "x'}"}`); !errors.As(err, &be) || !strings.Contains(err.Error(), "invalide") {
+		t.Errorf("unsafe name: %v", err)
+	}
+	if _, err := fill(`<text:p>&lt;&lt;refLookup:clause&gt;&gt;</text:p>`, `{"clause": "clauses/absente"}`); err == nil || !strings.Contains(err.Error(), "unknown clauses/absente") {
+		t.Errorf("unknown block: %v", err)
+	}
+
+	// The data contract asks for the field; the checks know the tag.
+	template := odtFile(t, ``, `<text:p>&lt;&lt;refLookup:contrat.clause&gt;&gt;</text:p><text:p>&lt;&lt;rs_risques&gt;&gt;</text:p><text:p>&lt;&lt;refLookupOp:clause&gt;&gt;</text:p><text:p>&lt;&lt;es_risques&gt;&gt;</text:p>`)
+	if fields, err := Fields(template); err != nil || fmt.Sprint(fields) != "[{contrat.clause text false} {risques list false} {risques[].clause text true}]" {
+		t.Errorf("fields: %v %v", fields, err)
+	}
+	issues, err := Lint(odtFile(t, ``, `<text:p>&lt;&lt;refLookup:clause&gt;&gt;</text:p><text:p>Voir &lt;&lt;ref:clauses/vol&gt;&gt;</text:p>`), LintOptions{})
+	if err != nil || len(issues) != 1 || issues[0].Code != "ref-alone" {
+		t.Errorf("lint: %+v %v", issues, err)
 	}
 }

@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import { describe, expect, it, vi } from 'vitest'
-import type { SettingsPage } from '@/api/generated/docibis'
+import type { FontsOverview, SettingsPage } from '@/api/generated/docibis'
 import { ConfigPage } from './ConfigPage'
 
 const page: SettingsPage = {
@@ -56,5 +56,48 @@ describe('ConfigPage', () => {
     await screen.findByText('Enregistré.')
     const logo = fetch.mock.calls.find(([url, init]) => url === '/api/branding' && init?.method === 'PUT')
     expect(JSON.parse(String(logo?.[1]?.body))).toEqual({ companyLogo: 'none' })
+  })
+
+  it('adds fonts and shows those the templates lack', async () => {
+    const fonts: FontsOverview = {
+      added: [],
+      installed: ['DejaVu Sans', 'Liberation Sans'],
+      missing: [
+        { family: 'Arial', substitute: 'Liberation Sans', templates: ['contrats/a.docx', 'contrats/b.docx'] },
+        { family: 'Helvetica Neue LT Std', templates: ['contrats/a.docx'] },
+      ],
+    }
+    const fetch = vi.fn(async (url: string, init?: RequestInit) => {
+      let body: unknown = page
+      if (url === '/api/fonts' && init?.method === 'POST') {
+        const file = (init.body as FormData).get('file') as File
+        body = { id: 1, file: file.name, family: 'Helvetica Neue LT Std', style: 'Roman', size: 2048, createdAt: '2026-11-06T10:00:00Z', createdBy: 'admin' }
+        fonts.added = [body as FontsOverview['added'][number]]
+        fonts.missing = fonts.missing.slice(0, 1)
+        return new Response(JSON.stringify(body), { status: 201, headers: { 'Content-Type': 'application/json' } })
+      }
+      if (url.includes('/api/fonts')) body = fonts
+      if (url.includes('/api/info')) body = { name: 'DocIbis', version: 'dev', instance: 'INT', database: { engine: 'sqlite', replication: { enabled: false, locked: false } } }
+      return new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } })
+    })
+    vi.stubGlobal('fetch', fetch)
+    render(
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <MemoryRouter initialEntries={['/configuration/polices']}>
+          <Routes>
+            <Route path="/configuration/:section?" element={<ConfigPage />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    )
+    expect(await screen.findByText('Helvetica Neue LT Std')).toBeInTheDocument()
+    expect(screen.getByText('remplacée par Liberation Sans, de mêmes dimensions')).toBeInTheDocument()
+    expect(screen.getByText('Polices installées (2 familles)')).toBeInTheDocument()
+
+    const file = new File(['font'], 'HelveticaNeueLTStd-Roman.otf', { type: 'font/otf' })
+    fireEvent.change(screen.getByLabelText('Ajouter des polices'), { target: { files: [file] } })
+    expect(await screen.findByText(/Ajoutées : Helvetica Neue LT Std Roman/)).toBeInTheDocument()
+    expect(await screen.findByText('HelveticaNeueLTStd-Roman.otf')).toBeInTheDocument()
+    expect(fetch.mock.calls.some(([url, init]) => url === '/api/fonts' && init?.method === 'POST')).toBe(true)
   })
 })

@@ -17,7 +17,9 @@ const (
 )
 
 // A tag is <<…>>; inside braces it may hold < and > (cs_{capital>60}).
-var tagPattern = regexp.MustCompile(`<<((?:[^<>{}]|\{[^{}]*\})*)>>`)
+// tagPattern finds <<tag>>: braces, and parentheses such as those of
+// filter(price>1), may hold < and >.
+var tagPattern = regexp.MustCompile(`<<((?:\((?:[^()<>]|<[^<(]|>[^>(])*\)|\{[^{}]*\}|[^<>{}])*)>>`)
 
 func isParagraph(n *node) bool { return n.name == "text:p" || n.name == "text:h" }
 
@@ -194,19 +196,24 @@ func (m *merger) loops(root *node, s scope) {
 	}
 }
 
-// items returns the list a repeat goes through.
+// items returns the list a repeat goes through, filtered, sorted and grouped
+// as its name asks.
 func items(s scope, name string) []any {
-	list, _ := s.lookup(name)
+	path, mods := listName(name)
+	list, _ := s.lookup(path)
 	out, _ := list.([]any)
-	return out
+	return arrange(out, mods, s)
 }
 
 // repeatRows copies the table rows between <<rr_x>> and <<er_x>>.
 func (m *merger) repeatRows(o occurrence, s scope) {
 	start, name := o.para.ancestor("table:table-row"), strings.TrimPrefix(o.tag, "rr_")
+	// The end may repeat the modifiers of the start, or not.
+	ends := []string{"er_" + name, "er_" + listPath(name)}
+	isEnd := func(n *node) bool { return hasTag(n, ends[0]) || hasTag(n, ends[1]) }
 	rows := []*node{start}
 	end := start
-	for !hasTag(end, "er_"+name) {
+	for !isEnd(end) {
 		i := end.index() + 1
 		if i >= len(end.parent.children) {
 			break
@@ -217,7 +224,7 @@ func (m *merger) repeatRows(o occurrence, s scope) {
 		}
 	}
 	for _, r := range rows {
-		stripTags(r, "rr_"+name, "er_"+name)
+		stripTags(r, "rr_"+name, ends[0], ends[1])
 	}
 	// As Docmosis does, a row that only held a marker is not repeated.
 	var kept []*node

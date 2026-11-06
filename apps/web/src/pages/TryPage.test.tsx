@@ -18,7 +18,7 @@ const template: TryTemplate = {
   sample: { client: { nom: 'Exemple nom' }, estClient: true },
 }
 
-const result: TryResult = { pdf: btoa('%PDF-1.7 test'), size: 13, engine: 'standard', prepareMs: 0, mergeMs: 3, renderMs: 151, totalMs: 160 }
+const result: TryResult = { pdf: btoa('%PDF-1.7 test'), format: 'pdf', size: 13, engine: 'standard', prepareMs: 0, mergeMs: 3, renderMs: 151, totalMs: 160 }
 
 function stubApi() {
   const answers: Record<string, unknown> = { '/api/info': info, '/api/try/analyze': template, '/api/try/render': result }
@@ -94,5 +94,29 @@ describe('TryPage', () => {
     expect(await screen.findByText('PDF produit en 160 ms')).toBeInTheDocument()
     const form = fetch.mock.calls.find(([url]) => url === '/api/try/render')?.[1]?.body as FormData
     expect([form.get('templateName'), form.get('watermark'), form.get('template'), form.get('pdfa')]).toEqual(['acme/fiche.docx', 'SPÉCIMEN', null, null])
+  })
+
+  it('sends the PDF options, and another format without them', async () => {
+    const fetch = stubApi()
+    URL.createObjectURL = vi.fn(() => 'blob:doc')
+    await openTemplate()
+    fireEvent.change(screen.getByLabelText("Mot de passe d'ouverture"), { target: { value: 'secret-1' } })
+    fireEvent.change(screen.getByLabelText('Mot de passe du propriétaire (restrictions)'), { target: { value: 'owner-1' } })
+    fireEvent.change(screen.getByLabelText('Impression'), { target: { value: '0' } })
+    fireEvent.change(screen.getByLabelText('Titre'), { target: { value: 'Devis 42' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Produire le PDF' }))
+    await screen.findByText('PDF produit en 160 ms')
+    const pdfForm = fetch.mock.calls.filter(([url]) => url === '/api/try/render').at(-1)?.[1]?.body as FormData
+    expect([pdfForm.get('passwordProtect'), pdfForm.get('pdfRestrictPassword'), pdfForm.get('pdfRestrictPrinting'), pdfForm.get('title'), pdfForm.get('format')])
+      .toEqual(['secret-1', 'owner-1', '0', 'Devis 42', null])
+
+    fetch.mockImplementation(async (url) => Response.json(url === '/api/try/render' ? { ...result, format: 'odt' } : url === '/api/info' ? info : template))
+    fireEvent.change(screen.getByLabelText('Format du document'), { target: { value: 'odt' } })
+    expect(screen.getByLabelText("Mot de passe d'ouverture")).toBeDisabled()
+    fireEvent.click(screen.getByRole('button', { name: 'Produire le document' }))
+    expect(await screen.findByText('Document produit en 160 ms')).toBeInTheDocument()
+    expect(screen.getByText("Pas d'aperçu pour ce format : téléchargez le document.")).toBeInTheDocument()
+    const odtForm = fetch.mock.calls.filter(([url]) => url === '/api/try/render').at(-1)?.[1]?.body as FormData
+    expect([odtForm.get('format'), odtForm.get('passwordProtect')]).toEqual(['odt', null])
   })
 })

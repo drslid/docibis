@@ -14,9 +14,11 @@ type scope []any
 func (s scope) push(v any) scope { return append(append(scope(nil), s...), v) }
 
 // item is the scope of the i-th item of a repeat of n items: the item, then
-// its number ($itemIdx from 0, $itemNum from 1), $size and itself as $item.
+// its number ($itemIdx from 0, $itemNum from 1, or $rowidx and $rownum as in
+// Docmosis), $size and itself as $item.
 func (s scope) item(i, n int, v any) scope {
-	meta := map[string]any{"$itemIdx": json.Number(strconv.Itoa(i)), "$itemNum": json.Number(strconv.Itoa(i + 1)),
+	idx, num := json.Number(strconv.Itoa(i)), json.Number(strconv.Itoa(i+1))
+	meta := map[string]any{"$itemIdx": idx, "$itemNum": num, "$rowidx": idx, "$rownum": num,
 		"$size": json.Number(strconv.Itoa(n)), "$item": v}
 	return s.push(meta).push(v)
 }

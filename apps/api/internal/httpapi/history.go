@@ -139,12 +139,7 @@ func (s *Server) RegenerateRender(ctx context.Context, req RegenerateRenderReque
 	}
 	s.audit(ctx, me.Username, "render.regenerate", fmt.Sprintf("render:%d", r.ID), r.Template)
 	disposition := mime.FormatMediaType("inline", map[string]string{"filename": doc.fileName()})
-	headers := RegenerateRender200ResponseHeaders{ContentDisposition: &disposition}
-	body, size := bytes.NewReader(doc.content), int64(len(doc.content))
-	if doc.format == "docx" {
-		return RegenerateRender200ApplicationvndOpenxmlformatsOfficedocumentWordprocessingmlDocumentResponse{Body: body, ContentLength: size, Headers: headers}, nil
-	}
-	return RegenerateRender200ApplicationpdfResponse{Body: body, ContentLength: size, Headers: headers}, nil
+	return documentResponse{body: doc.content, format: doc.format, headers: map[string]string{"Content-Disposition": disposition}}, nil
 }
 
 func (s *Server) ListAudit(ctx context.Context, req ListAuditRequestObject) (ListAuditResponseObject, error) {

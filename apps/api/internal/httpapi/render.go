@@ -1,12 +1,12 @@
 package httpapi
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"mime"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -30,17 +30,15 @@ func (s *Server) RenderDocument(ctx context.Context, req RenderDocumentRequestOb
 		}
 	}
 	total, engine := ms(time.Since(start)), "standard"
-	disposition := mime.FormatMediaType("attachment", map[string]string{"filename": doc.fileName()})
-	headers := RenderDocument200ResponseHeaders{ContentDisposition: &disposition, XRenderMs: &total, XRenderEngine: &engine}
+	headers := map[string]string{
+		"Content-Disposition": mime.FormatMediaType("attachment", map[string]string{"filename": doc.fileName()}),
+		"X-Render-Ms":         strconv.Itoa(total),
+		"X-Render-Engine":     engine,
+	}
 	if len(doc.missing) > 0 {
-		missing := missingHeader(doc.missing)
-		headers.XMissingFields = &missing
+		headers["X-Missing-Fields"] = missingHeader(doc.missing)
 	}
-	body, size := bytes.NewReader(doc.content), int64(len(doc.content))
-	if doc.format == "docx" {
-		return RenderDocument200ApplicationvndOpenxmlformatsOfficedocumentWordprocessingmlDocumentResponse{Body: body, ContentLength: size, Headers: headers}, nil
-	}
-	return RenderDocument200ApplicationpdfResponse{Body: body, ContentLength: size, Headers: headers}, nil
+	return documentResponse{body: doc.content, format: doc.format, headers: headers}, nil
 }
 
 // missingHeader lists the missing data for X-Missing-Fields: paths separated

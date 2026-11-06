@@ -49,7 +49,7 @@ curl -X POST ${origin}/api/render \\
   -o fiche.pdf
 \`\`\`
 
-- Le format vient de \`outputFormat\`, sinon de l'extension de \`outputName\` (pdf, docx).
+- Le format vient de \`outputFormat\`, sinon de l'extension de \`outputName\` (pdf, docx, doc, odt, rtf, html, txt).
 - Une erreur revient comme chez Docmosis : \`{"succeeded": false, "shortMsg": "…"}\`.
 - Le nom peut omettre l'extension : \`acme/contracts/fiche_conseil\` trouve le \`.docx\`.
 - Les options PDF de Docmosis sont reprises sous leurs noms : \`passwordProtect\`,
@@ -176,7 +176,7 @@ Une clé par application et par environnement, créée par un administrateur dan
 |---|---|
 | \`template\` | Le modèle Word (\`.docx\`) avec ses balises Docmosis. Obligatoire. |
 | \`data\` | Les données JSON, en texte ou en fichier. Obligatoire. |
-| \`format\` | \`pdf\` (par défaut) ou \`docx\`. |
+| \`format\` | \`pdf\` (par défaut), \`docx\`, \`doc\`, \`odt\`, \`rtf\`, \`html\` (images incluses) ou \`txt\` (UTF-8). Les options PDF ne valent que pour le PDF. |
 
 ## 3. Le document
 
@@ -387,7 +387,14 @@ largeur et les autres colonnes s'élargissent.
 - **Paragraphes ou blocs** : \`<<rs_beneficiaires>>\` … \`<<es_>>\` répète tout ce qui est entre
   les deux (paragraphes, tableaux, sauts de page).
 - Dans une répétition, les champs se lisent depuis l'élément (\`<<nom>>\`) ; \`<<$itemNum>>\` donne
-  son numéro (1, 2, 3…), \`<<$itemIdx>>\` sa position depuis 0.
+  son numéro (1, 2, 3…), \`<<$itemIdx>>\` sa position depuis 0 (\`$rownum\` et \`$rowidx\` comme
+  dans Docmosis).
+- **Filtrer et trier** : \`<<rr_garanties:filter(prime > 0):sort(DESC,prime)>>\` ne garde que
+  les éléments qui répondent à la condition, du plus grand au plus petit ; \`:sort(nom)\` trie
+  par ordre croissant, plusieurs clés se séparent par des virgules.
+- **Regrouper** : \`<<rs_garanties:group(type)>>\` répète une fois par valeur de \`type\` ;
+  \`<<$groupKey>>\` donne cette valeur et \`<<rs_$groupItems>>\` … \`<<es_$groupItems>>\` répète
+  les éléments du groupe.
 
 ## Cases à cocher
 
@@ -421,6 +428,15 @@ mal fermées ou coupées par Word, sections \`cs_\`/\`rs_\` sans \`es_\`, foncti
 polices absentes du serveur (remplacées, donc mise en page différente), révisions et
 commentaires Word oubliés. Le résultat s'affiche dans la bibliothèque et sur la page Essai.
 
+## Polices
+
+Un administrateur ajoute les polices de la marque ou sous licence dans Configuration,
+[Polices](/configuration/polices) (fichiers \`.ttf\`, \`.otf\` ou \`.ttc\`). DocIbis les garde dans
+sa base, les installe pour LibreOffice et le moteur natif sur toutes ses tâches et redémarre
+les workers ; puis il vérifie de nouveau tous les modèles et les compare à leur référence. La
+même page liste les polices que des modèles publiés utilisent sans que le serveur les ait,
+avec la police de mêmes dimensions qui les remplace quand il y en a une.
+
 ## Blocs partagés
 
 Un paragraphe qui ne contient que \`<<ref:clauses/rgpd>>\` est remplacé par le contenu du
@@ -429,6 +445,10 @@ une clause, un bloc de signature, des mentions légales écrits une seule fois p
 modèles. Le bloc garde sa mise en forme et ses images ; un bloc peut en inclure un autre
 (4 niveaux au plus). Publier une nouvelle version du bloc change tous les documents qui
 l'incluent. Un modèle avec des blocs partagés est toujours produit par LibreOffice.
+
+**Bloc choisi par les données** : \`<<refLookup:clause>>\` insère le bloc dont les données
+donnent le nom (\`"clause": "clauses/vol"\`) ; dans une répétition, chaque élément peut nommer
+le sien. Sans nom, le document est refusé ; \`<<refLookupOp:clause>>\` n'insère alors rien.
 
 ## Liasses
 

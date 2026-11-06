@@ -34,6 +34,7 @@ func TestSharedBlocks(t *testing.T) {
 		"clauses/rgpd.odt":   `<text:p>Vos données, &lt;&lt;client.nom&gt;&gt;, restent chez nous.</text:p>`,
 		"contrats/offre.odt": `<text:p>Offre pour &lt;&lt;client.nom&gt;&gt;</text:p><text:p>&lt;&lt;ref:clauses/rgpd&gt;&gt;</text:p>`,
 		"contrats/faux.odt":  `<text:p>&lt;&lt;ref:clauses/absente&gt;&gt;</text:p>`,
+		"contrats/choix.odt": `<text:p>Choix</text:p><text:p>&lt;&lt;refLookup:client.clause&gt;&gt;</text:p>`,
 	} {
 		if code, out := admin.send(http.MethodPost, "/api/templates", map[string]part{"file": {"x.odt", odtTemplate(t, body)}}, map[string]string{"path": path}); code != http.StatusCreated {
 			t.Fatalf("create %s: %d %v", path, code, out)
@@ -49,5 +50,14 @@ func TestSharedBlocks(t *testing.T) {
 	}
 	if code, body := render("contrats/faux"); code != http.StatusBadRequest || !strings.Contains(body, "Bloc partagé") || !strings.Contains(body, "clauses/absente") {
 		t.Fatalf("missing block: %d %s", code, body)
+	}
+
+	// <<refLookup:x>>: the data names the block.
+	rec := callRenderNamed(h, key, "contrats/choix", `{"client": {"nom": "Martin", "clause": "clauses/rgpd"}}`)
+	if body := rec.Body.String(); rec.Code != http.StatusOK || !strings.Contains(body, "Vos données, Martin, restent chez nous.") || strings.Contains(body, "cs_") {
+		t.Fatalf("refLookup: %d %s", rec.Code, body)
+	}
+	if code, body := render("contrats/choix"); code != http.StatusBadRequest || !strings.Contains(body, "refLookup:client.clause") {
+		t.Fatalf("refLookup without a name: %d %s", code, body)
 	}
 }

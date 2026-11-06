@@ -79,6 +79,14 @@ func TestAPIKeysAndRender(t *testing.T) {
 		rec.Header().Get("Content-Type") != "application/vnd.openxmlformats-officedocument.wordprocessingml.document" {
 		t.Fatalf("docx: %d %v", rec.Code, rec.Header())
 	}
+	for format, want := range map[string]string{"rtf": "application/rtf", "HTM": "text/html; charset=utf-8", "txt": "text/plain; charset=utf-8", "doc": "application/msword"} {
+		rec := callRender(app, secret, tpl, map[string]string{"data": `{"name": "Ann"}`, "format": format})
+		ext := strings.ToLower(strings.Replace(format, "HTM", "html", 1))
+		if rec.Code != http.StatusOK || rec.Header().Get("Content-Type") != want || rec.Header().Get("Content-Disposition") != "attachment; filename=modele."+ext ||
+			(ext == "html") != (rec.Header().Get("Content-Security-Policy") == "sandbox") {
+			t.Fatalf("%s: %d %v", format, rec.Code, rec.Header())
+		}
+	}
 	for _, fields := range []map[string]string{{"data": `{"name": "Ann"}`, "format": "xls"}, {"data": "not json"}, {}} {
 		if rec := callRender(app, secret, tpl, fields); rec.Code != http.StatusBadRequest || rec.Header().Get("Content-Type") != "application/problem+json" {
 			t.Fatalf("%v: %d", fields, rec.Code)

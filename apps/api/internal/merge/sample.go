@@ -86,6 +86,8 @@ func Sample(template []byte) (map[string]any, error) {
 					paths(e, "", func(p, fn string) { set(target, p, exampleFor(p, fn, e)) })
 				}
 			case control(tag), strings.HasPrefix(tag, "$"):
+			case strings.HasPrefix(tag, "ref:"), strings.HasPrefix(tag, "refLookup:"), strings.HasPrefix(tag, "refLookupOp:"):
+				// A shared block: no example names one of the library.
 			case strings.Contains(tag, "{renderer="):
 				path, _, _ := strings.Cut(tag, "{")
 				box = !box
@@ -177,6 +179,11 @@ func literal(s string) any {
 // item returns the element of a list where the fields of a repeat go; the
 // list gets two items, the second a copy of the first.
 func item(data map[string]any, name string) map[string]any {
+	name = listPath(name)
+	if name == groupItems {
+		// The items of a group are those of the list grouped.
+		return data
+	}
 	list, _ := data[name].([]any)
 	if len(list) == 0 {
 		list = []any{map[string]any{}, map[string]any{}}

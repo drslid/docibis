@@ -21,7 +21,10 @@ import time
 import uno
 from com.sun.star.beans import PropertyValue
 
-FILTERS = {"pdf": "writer_pdf_Export", "docx": "MS Word 2007 XML", "odt": "writer8"}
+FILTERS = {"pdf": "writer_pdf_Export", "docx": "MS Word 2007 XML", "odt": "writer8", "doc": "MS Word 97",
+           "rtf": "Rich Text Format", "html": "HTML (StarWriter)", "txt": "Text (encoded)"}
+# UTF-8 text without BOM and with Unix line ends; HTML with its images inside.
+FILTER_OPTIONS = {"txt": "UTF8,LF,,,false", "html": "EmbedImages"}
 # Export options in JSON, as LibreOffice writes them: {"SelectPdfVersion": {"type": "long", "value": "2"}}.
 TYPES = {"long": int, "short": int, "unsigned long": int, "boolean": lambda v: str(v).lower() == "true", "string": str}
 START_TIMEOUT = 60
@@ -102,6 +105,8 @@ class Office:
         if name is None:
             raise ValueError(f"unknown format {fmt!r}")
         export = [prop("FilterName", name), prop("Overwrite", True)]
+        if fmt in FILTER_OPTIONS:
+            export.append(prop("FilterOptions", FILTER_OPTIONS[fmt]))
         data = filter_data(options)
         if data:
             export.append(prop("FilterData", uno.Any("[]com.sun.star.beans.PropertyValue", data)))

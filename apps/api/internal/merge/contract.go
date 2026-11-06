@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"bytes"
 	"fmt"
+	"slices"
 	"strings"
 )
 
@@ -63,13 +64,15 @@ func Fields(template []byte) ([]Field, error) {
 		for _, o := range occurrences(tree) {
 			tag := quotes.Replace(o.tag)
 			prefix := ""
-			if len(lists) > 0 {
-				prefix = strings.Join(lists, "[].") + "[]."
+			if kept := slices.DeleteFunc(slices.Clone(lists), func(l string) bool { return l == groupItems }); len(kept) > 0 {
+				prefix = strings.Join(kept, "[].") + "[]."
 			}
 			switch {
 			case strings.HasPrefix(tag, "rr_"):
-				name := strings.TrimPrefix(tag, "rr_")
-				add(prefix+name, "list", sections > 0)
+				name := listPath(strings.TrimPrefix(tag, "rr_"))
+				if name != groupItems {
+					add(prefix+name, "list", sections > 0)
+				}
 				lists = append(lists, name)
 				rows = append(rows, "list")
 			case strings.HasPrefix(tag, "er_") && len(rows) > 0:
@@ -78,8 +81,10 @@ func Fields(template []byte) ([]Field, error) {
 				}
 				rows = rows[:len(rows)-1]
 			case strings.HasPrefix(tag, "rs_"):
-				name := strings.TrimPrefix(tag, "rs_")
-				add(prefix+name, "list", sections > 0)
+				name := listPath(strings.TrimPrefix(tag, "rs_"))
+				if name != groupItems {
+					add(prefix+name, "list", sections > 0)
+				}
 				lists = append(lists, name)
 				blocks = append(blocks, "list")
 			case strings.HasPrefix(tag, "cs_"), strings.HasPrefix(tag, "cr_"), strings.HasPrefix(tag, "cc_"):
@@ -111,7 +116,10 @@ func Fields(template []byte) ([]Field, error) {
 				if e, err := parseExpr(strings.Trim(tag, "{}")); err == nil {
 					paths(e, "", func(p, _ string) { add(prefix+p, "text", sections > 0) })
 				}
-			case control(tag), strings.HasPrefix(tag, "$"):
+			case control(tag), strings.HasPrefix(tag, "$"), strings.HasPrefix(tag, "ref:"):
+			case strings.HasPrefix(tag, "refLookup:"), strings.HasPrefix(tag, "refLookupOp:"):
+				kind, field, _ := strings.Cut(tag, ":")
+				add(prefix+field, "text", sections > 0 || kind == "refLookupOp")
 			case strings.Contains(tag, "{renderer="):
 				path, _, _ := strings.Cut(tag, "{")
 				add(prefix+path, "flag", true)

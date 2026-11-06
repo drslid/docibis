@@ -26,8 +26,10 @@ for name in ("HTTPS_PROXY", "HTTP_PROXY", "ALL_PROXY", "https_proxy", "http_prox
 os.environ.pop("NO_PROXY", None)
 os.environ.pop("no_proxy", None)
 
-FONTS = [p for p in os.environ.get(
-    "DOCIBIS_NATIVE_FONTS", "/opt/libreoffice26.8/share/fonts:/usr/share/fonts:/usr/local/share/fonts").split(":") if p]
+# The fonts LibreOffice uses, then those an administrator added.
+FONTS = [p for p in (os.environ.get(
+    "DOCIBIS_NATIVE_FONTS", "/opt/libreoffice26.8/share/fonts:/usr/share/fonts:/usr/local/share/fonts")
+    + ":" + os.environ.get("DOCIBIS_FONTS_ADDED", "")).split(":") if p]
 MEMORY_MB = int(os.environ.get("DOCIBIS_NATIVE_MEMORY_MB", "1024"))
 CACHED = 32
 

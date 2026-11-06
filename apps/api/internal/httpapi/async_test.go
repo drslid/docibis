@@ -237,7 +237,7 @@ func TestAsyncRender(t *testing.T) {
 	if done = waitJob(t, h, key, id, finished); done["status"] != "done" || done["upload"] != nil || done["format"] != "docx" {
 		t.Fatalf("docx: %v", done)
 	}
-	if rec := getWithKey(h, key, "/v1/jobs/"+id+"/document"); rec.Code != http.StatusOK || rec.Header().Get("Content-Type") != docxType {
+	if rec := getWithKey(h, key, "/v1/jobs/"+id+"/document"); rec.Code != http.StatusOK || rec.Header().Get("Content-Type") != contentType("docx") {
 		t.Fatalf("docx document: %d %v", rec.Code, rec.Header())
 	}
 

@@ -111,7 +111,7 @@ func Analyze(template []byte) (Analysis, error) {
 			case strings.HasPrefix(tag, "op:"):
 				// The paragraph may go: what follows moves up.
 				a.BlockSections++
-			case strings.HasPrefix(tag, "ref:"):
+			case strings.HasPrefix(tag, "ref:"), strings.HasPrefix(tag, "refLookup:"), strings.HasPrefix(tag, "refLookupOp:"):
 				// A shared block: its text comes from another template.
 				refs = true
 			case strings.HasPrefix(tag, "link:"), strings.HasPrefix(tag, "link_"):

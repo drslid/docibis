@@ -502,6 +502,11 @@ export type RenderFormFormat = typeof RenderFormFormat[keyof typeof RenderFormFo
 export const RenderFormFormat = {
   pdf: 'pdf',
   docx: 'docx',
+  doc: 'doc',
+  odt: 'odt',
+  rtf: 'rtf',
+  html: 'html',
+  txt: 'txt',
 } as const;
 
 /**
@@ -663,6 +668,11 @@ export type RenderJobFormat = typeof RenderJobFormat[keyof typeof RenderJobForma
 export const RenderJobFormat = {
   pdf: 'pdf',
   docx: 'docx',
+  doc: 'doc',
+  odt: 'odt',
+  rtf: 'rtf',
+  html: 'html',
+  txt: 'txt',
 } as const;
 
 /**
@@ -719,6 +729,11 @@ export type RenderOptionsFormat = typeof RenderOptionsFormat[keyof typeof Render
 export const RenderOptionsFormat = {
   pdf: 'pdf',
   docx: 'docx',
+  doc: 'doc',
+  odt: 'odt',
+  rtf: 'rtf',
+  html: 'html',
+  txt: 'txt',
 } as const;
 
 export type RenderOptionsPdfa = typeof RenderOptionsPdfa[keyof typeof RenderOptionsPdfa];
@@ -830,7 +845,7 @@ export interface DocmosisRender {
   /** Clé API DocIbis (dib_…) ; sinon en-tête Authorization */
   accessKey?: string;
   templateName: string;
-  /** Nom du document ; son extension donne le format (pdf, docx) */
+  /** Nom du document ; son extension donne le format (pdf, docx, doc, odt, rtf, html, txt) */
   outputName: string;
   outputFormat?: string;
   /** Données du document, objet JSON ou texte JSON */
@@ -1135,6 +1150,45 @@ export interface TemplateImport {
   publish?: boolean;
 }
 
+export interface FontUpload {
+  /** Fichier de police (.ttf, .otf ou .ttc) */
+  file: Blob | File;
+}
+
+/**
+ * Police ajoutée par un administrateur, installée pour tous les workers
+ */
+export interface AddedFont {
+  id: number;
+  /** Nom du fichier envoyé */
+  file: string;
+  /** Famille lue dans le fichier */
+  family: string;
+  /** Style lu dans le fichier (Regular, Bold…) */
+  style: string;
+  size: number;
+  createdAt: string;
+  createdBy: string;
+}
+
+/**
+ * Police utilisée par des modèles publiés et absente du serveur
+ */
+export interface MissingFont {
+  family: string;
+  /** Police libre de mêmes dimensions utilisée à sa place, s'il y en a une */
+  substitute?: string;
+  /** Chemins des modèles qui l'utilisent */
+  templates: string[];
+}
+
+export interface FontsOverview {
+  added: AddedFont[];
+  /** Familles que LibreOffice trouve sur ce serveur (image et polices ajoutées), vide si la liste est indisponible */
+  installed: string[];
+  missing: MissingFont[];
+}
+
 export type TemplateUpdateDataCheck = typeof TemplateUpdateDataCheck[keyof typeof TemplateUpdateDataCheck];
 
 
@@ -1255,6 +1309,22 @@ export interface ApiKeyCreated {
   secret: string;
 }
 
+/**
+ * Format du document produit ; les options PDF ne valent que pour le PDF
+ */
+export type TryRenderFormFormat = typeof TryRenderFormFormat[keyof typeof TryRenderFormFormat];
+
+
+export const TryRenderFormFormat = {
+  pdf: 'pdf',
+  docx: 'docx',
+  doc: 'doc',
+  odt: 'odt',
+  rtf: 'rtf',
+  html: 'html',
+  txt: 'txt',
+} as const;
+
 export type TryRenderFormPdfa = typeof TryRenderFormPdfa[keyof typeof TryRenderFormPdfa];
 
 
@@ -1292,6 +1362,8 @@ export interface TryRenderForm {
   templateName?: string;
   /** Données JSON du document */
   data: string;
+  /** Format du document produit ; les options PDF ne valent que pour le PDF */
+  format?: TryRenderFormFormat;
   pdfa?: TryRenderFormPdfa;
   accessible?: boolean;
   watermark?: string;
@@ -1382,9 +1454,11 @@ export const TryResultEngine = {
 } as const;
 
 export interface TryResult {
-  /** Le PDF, en base64 */
+  /** Le document, en base64 (un PDF, sauf autre format demandé) */
   pdf: string;
-  /** Taille du PDF, en octets */
+  /** Format du document */
+  format: string;
+  /** Taille du document, en octets */
   size: number;
   /** Moteur utilisé, standard (LibreOffice), overlay (moteur rapide, calque posé sur un fond déjà rendu) ou native (copie Typst du modèle) */
   engine: TryResultEngine;
@@ -2005,6 +2079,11 @@ export type ListRendersFormat = typeof ListRendersFormat[keyof typeof ListRender
 export const ListRendersFormat = {
   pdf: 'pdf',
   docx: 'docx',
+  doc: 'doc',
+  odt: 'odt',
+  rtf: 'rtf',
+  html: 'html',
+  txt: 'txt',
 } as const;
 
 export type ListAuditParams = {
@@ -4226,6 +4305,9 @@ if(tryRenderForm.templateName !== undefined) {
  formData.append(`templateName`, tryRenderForm.templateName);
  }
 formData.append(`data`, tryRenderForm.data);
+if(tryRenderForm.format !== undefined) {
+ formData.append(`format`, tryRenderForm.format);
+ }
 if(tryRenderForm.pdfa !== undefined) {
  formData.append(`pdfa`, tryRenderForm.pdfa);
  }
@@ -5905,6 +5987,257 @@ export function useGetBrandingLogo<TData = Awaited<ReturnType<typeof getBranding
 
 
 
+
+export const getListFontsUrl = () => {
+
+
+
+
+  return `/api/fonts`
+}
+
+/**
+ * @summary Polices du serveur, polices ajoutées et polices des modèles absentes
+ */
+export const listFonts = async ( options?: Parameters<typeof apiFetch>[1]): Promise<FontsOverview> => {
+
+  return apiFetch<FontsOverview>(getListFontsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListFontsQueryKey = () => {
+    return [
+    `/api/fonts`
+    ] as const;
+    }
+
+
+export const getListFontsQueryOptions = <TData = Awaited<ReturnType<typeof listFonts>>, TError = ErrorType<UnauthorizedResponse>>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listFonts>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListFontsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listFonts>>> = ({ signal }) => listFonts({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listFonts>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type ListFontsQueryResult = NonNullable<Awaited<ReturnType<typeof listFonts>>>
+export type ListFontsQueryError = ErrorType<UnauthorizedResponse>
+
+
+export function useListFonts<TData = Awaited<ReturnType<typeof listFonts>>, TError = ErrorType<UnauthorizedResponse>>(
+  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listFonts>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listFonts>>,
+          TError,
+          Awaited<ReturnType<typeof listFonts>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListFonts<TData = Awaited<ReturnType<typeof listFonts>>, TError = ErrorType<UnauthorizedResponse>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listFonts>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listFonts>>,
+          TError,
+          Awaited<ReturnType<typeof listFonts>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListFonts<TData = Awaited<ReturnType<typeof listFonts>>, TError = ErrorType<UnauthorizedResponse>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listFonts>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Polices du serveur, polices ajoutées et polices des modèles absentes
+ */
+
+export function useListFonts<TData = Awaited<ReturnType<typeof listFonts>>, TError = ErrorType<UnauthorizedResponse>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listFonts>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getListFontsQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getAddFontUrl = () => {
+
+
+
+
+  return `/api/fonts`
+}
+
+/**
+ * @summary Ajoute une police TTF, OTF ou TTC ; les workers redémarrent pour la prendre et les modèles sont vérifiés de nouveau (administrateurs)
+ */
+export const addFont = async (fontUpload: FontUpload, options?: Parameters<typeof apiFetch>[1]): Promise<AddedFont> => {
+    const formData = new FormData();
+formData.append(`file`, fontUpload.file);
+
+  return apiFetch<AddedFont>(getAddFontUrl(),
+  {
+    ...options,
+    method: 'POST'
+    ,
+    body: formData
+  }
+);}
+
+
+
+
+
+export const getAddFontMutationKey = () => ['addFont'] as const;
+
+export const getAddFontMutationOptions = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | TooLargeResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof addFont>>, TError,AddFontMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof addFont>>, TError,AddFontMutationVariables, TContext> => {
+
+const mutationKey = getAddFontMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof addFont>>, AddFontMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  addFont(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type AddFontMutationResult = NonNullable<Awaited<ReturnType<typeof addFont>>>
+    export type AddFontMutationBody = FontUpload
+    export type AddFontMutationError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | TooLargeResponse>
+    export type AddFontMutationVariables = {data: FontUpload}
+
+    /**
+ * @summary Ajoute une police TTF, OTF ou TTC ; les workers redémarrent pour la prendre et les modèles sont vérifiés de nouveau (administrateurs)
+ */
+export const useAddFont = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | TooLargeResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof addFont>>, TError,AddFontMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof addFont>>,
+        TError,
+        AddFontMutationVariables,
+        TContext
+      > => {
+      return useMutation(getAddFontMutationOptions(options), queryClient);
+    }
+
+export const getDeleteFontUrl = (id: number,) => {
+
+
+
+
+  return `/api/fonts/${id}`
+}
+
+/**
+ * @summary Retire une police ajoutée ; les workers redémarrent sans elle (administrateurs)
+ */
+export const deleteFont = async (id: number, options?: Parameters<typeof apiFetch>[1]): Promise<void> => {
+
+  return apiFetch<void>(getDeleteFontUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDeleteFontMutationKey = () => ['deleteFont'] as const;
+
+export const getDeleteFontMutationOptions = <TError = ErrorType<UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteFont>>, TError,DeleteFontMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteFont>>, TError,DeleteFontMutationVariables, TContext> => {
+
+const mutationKey = getDeleteFontMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteFont>>, DeleteFontMutationVariables> = (props) => {
+          const {id} = props ?? {};
+
+          return  deleteFont(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteFontMutationResult = NonNullable<Awaited<ReturnType<typeof deleteFont>>>
+
+    export type DeleteFontMutationError = ErrorType<UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>
+    export type DeleteFontMutationVariables = {id: number}
+
+    /**
+ * @summary Retire une police ajoutée ; les workers redémarrent sans elle (administrateurs)
+ */
+export const useDeleteFont = <TError = ErrorType<UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteFont>>, TError,DeleteFontMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof deleteFont>>,
+        TError,
+        DeleteFontMutationVariables,
+        TContext
+      > => {
+      return useMutation(getDeleteFontMutationOptions(options), queryClient);
+    }
 
 export const getGetDashboardUrl = () => {
 

@@ -1,7 +1,6 @@
 package httpapi
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -120,10 +119,5 @@ func (s *Server) DocmosisRender(ctx context.Context, req DocmosisRenderRequestOb
 		}
 	}
 	disposition := mime.FormatMediaType("attachment", map[string]string{"filename": doc.fileName()})
-	headers := DocmosisRender200ResponseHeaders{ContentDisposition: &disposition}
-	body, size := bytes.NewReader(doc.content), int64(len(doc.content))
-	if doc.format == "docx" {
-		return DocmosisRender200ApplicationvndOpenxmlformatsOfficedocumentWordprocessingmlDocumentResponse{Body: body, ContentLength: size, Headers: headers}, nil
-	}
-	return DocmosisRender200ApplicationpdfResponse{Body: body, ContentLength: size, Headers: headers}, nil
+	return documentResponse{body: doc.content, format: doc.format, headers: map[string]string{"Content-Disposition": disposition}}, nil
 }

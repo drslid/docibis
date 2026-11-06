@@ -65,6 +65,26 @@ paths:
               schema:
                 type: string
                 format: binary
+            application/msword:
+              schema:
+                type: string
+                format: binary
+            application/vnd.oasis.opendocument.text:
+              schema:
+                type: string
+                format: binary
+            application/rtf:
+              schema:
+                type: string
+                format: binary
+            text/html:
+              schema:
+                type: string
+                format: binary
+            text/plain:
+              schema:
+                type: string
+                format: binary
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -169,6 +189,26 @@ paths:
                 type: string
                 format: binary
             application/vnd.openxmlformats-officedocument.wordprocessingml.document:
+              schema:
+                type: string
+                format: binary
+            application/msword:
+              schema:
+                type: string
+                format: binary
+            application/vnd.oasis.opendocument.text:
+              schema:
+                type: string
+                format: binary
+            application/rtf:
+              schema:
+                type: string
+                format: binary
+            text/html:
+              schema:
+                type: string
+                format: binary
+            text/plain:
               schema:
                 type: string
                 format: binary
@@ -358,6 +398,26 @@ paths:
                 type: string
                 format: binary
             application/vnd.openxmlformats-officedocument.wordprocessingml.document:
+              schema:
+                type: string
+                format: binary
+            application/msword:
+              schema:
+                type: string
+                format: binary
+            application/vnd.oasis.opendocument.text:
+              schema:
+                type: string
+                format: binary
+            application/rtf:
+              schema:
+                type: string
+                format: binary
+            text/html:
+              schema:
+                type: string
+                format: binary
+            text/plain:
               schema:
                 type: string
                 format: binary
@@ -876,7 +936,7 @@ paths:
         - {name: q, in: query, description: "Texte cherché dans le modèle, l'auteur et l'erreur", schema: {type: string}}
         - {name: status, in: query, schema: {type: string, enum: [ok, refused, error]}}
         - {name: source, in: query, schema: {type: string, enum: [console, api, mcp]}}
-        - {name: format, in: query, schema: {type: string, enum: [pdf, docx]}}
+        - {name: format, in: query, schema: {type: string, enum: [pdf, docx, doc, odt, rtf, html, txt]}}
         - {name: limit, in: query, schema: {type: integer, minimum: 1, maximum: 200, default: 50}}
         - {name: offset, in: query, schema: {type: integer, minimum: 0, default: 0}}
       responses:
@@ -986,6 +1046,61 @@ paths:
               schema:
                 type: string
                 format: binary
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/fonts:
+    get:
+      operationId: listFonts
+      tags: [console]
+      summary: Polices du serveur, polices ajoutées et polices des modèles absentes
+      responses:
+        "200":
+          description: Les polices
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FontsOverview"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      operationId: addFont
+      tags: [console]
+      summary: Ajoute une police TTF, OTF ou TTC ; les workers redémarrent pour la prendre et les modèles sont vérifiés de nouveau (administrateurs)
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: "#/components/schemas/FontUpload"
+      responses:
+        "201":
+          description: Police ajoutée (ou déjà présente)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AddedFont"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "413":
+          $ref: "#/components/responses/TooLarge"
+  /api/fonts/{id}:
+    parameters:
+      - {name: id, in: path, required: true, schema: {type: integer, format: int64}}
+    delete:
+      operationId: deleteFont
+      tags: [console]
+      summary: Retire une police ajoutée ; les workers redémarrent sans elle (administrateurs)
+      responses:
+        "204":
+          description: Police retirée
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
   /api/dashboard:
@@ -1904,6 +2019,26 @@ paths:
                 type: string
                 format: binary
             application/vnd.openxmlformats-officedocument.wordprocessingml.document:
+              schema:
+                type: string
+                format: binary
+            application/msword:
+              schema:
+                type: string
+                format: binary
+            application/vnd.oasis.opendocument.text:
+              schema:
+                type: string
+                format: binary
+            application/rtf:
+              schema:
+                type: string
+                format: binary
+            text/html:
+              schema:
+                type: string
+                format: binary
+            text/plain:
               schema:
                 type: string
                 format: binary
@@ -2965,7 +3100,7 @@ components:
         format:
           description: Format du document produit
           type: string
-          enum: [pdf, docx]
+          enum: [pdf, docx, doc, odt, rtf, html, txt]
           default: pdf
         outputName:
           description: Nom du fichier rendu (Content-Disposition)
@@ -3083,7 +3218,7 @@ components:
           type: string
         format:
           type: string
-          enum: [pdf, docx]
+          enum: [pdf, docx, doc, odt, rtf, html, txt]
         size:
           description: Taille du document, en octets
           type: integer
@@ -3106,7 +3241,7 @@ components:
       properties:
         format:
           type: string
-          enum: [pdf, docx]
+          enum: [pdf, docx, doc, odt, rtf, html, txt]
         pdfa:
           type: string
           enum: [none, PDF/A-1b, PDF/A-2b, PDF/A-3b]
@@ -3210,7 +3345,7 @@ components:
         templateName:
           type: string
         outputName:
-          description: Nom du document ; son extension donne le format (pdf, docx)
+          description: Nom du document ; son extension donne le format (pdf, docx, doc, odt, rtf, html, txt)
           type: string
         outputFormat:
           type: string
@@ -3527,6 +3662,71 @@ components:
           format: binary
         publish:
           type: boolean
+    FontUpload:
+      type: object
+      required: [file]
+      properties:
+        file:
+          description: Fichier de police (.ttf, .otf ou .ttc)
+          type: string
+          format: binary
+    AddedFont:
+      description: Police ajoutée par un administrateur, installée pour tous les workers
+      type: object
+      required: [id, file, family, style, size, createdAt, createdBy]
+      properties:
+        id:
+          type: integer
+          format: int64
+        file:
+          description: Nom du fichier envoyé
+          type: string
+        family:
+          description: Famille lue dans le fichier
+          type: string
+        style:
+          description: Style lu dans le fichier (Regular, Bold…)
+          type: string
+        size:
+          type: integer
+          format: int64
+        createdAt:
+          type: string
+          format: date-time
+        createdBy:
+          type: string
+    MissingFont:
+      description: Police utilisée par des modèles publiés et absente du serveur
+      type: object
+      required: [family, templates]
+      properties:
+        family:
+          type: string
+        substitute:
+          description: Police libre de mêmes dimensions utilisée à sa place, s'il y en a une
+          type: string
+        templates:
+          description: Chemins des modèles qui l'utilisent
+          type: array
+          items:
+            type: string
+    FontsOverview:
+      type: object
+      required: [added, installed, missing]
+      properties:
+        added:
+          type: array
+          items:
+            $ref: "#/components/schemas/AddedFont"
+        installed:
+          description: Familles que LibreOffice trouve sur ce serveur (image et polices ajoutées), vide si la liste est indisponible
+          type: array
+          items:
+            type: string
+        missing:
+          type: array
+          items:
+            $ref: "#/components/schemas/MissingFont"
     TemplateUpdate:
       type: object
       properties:
@@ -3720,6 +3920,11 @@ components:
         data:
           description: Données JSON du document
           type: string
+        format:
+          description: Format du document produit ; les options PDF ne valent que pour le PDF
+          type: string
+          enum: [pdf, docx, doc, odt, rtf, html, txt]
+          default: pdf
         pdfa:
           type: string
           enum: [none, PDF/A-1b, PDF/A-2b, PDF/A-3b]
@@ -3831,14 +4036,17 @@ components:
           type: string
     TryResult:
       type: object
-      required: [pdf, size, engine, prepareMs, mergeMs, renderMs, totalMs]
+      required: [pdf, format, size, engine, prepareMs, mergeMs, renderMs, totalMs]
       properties:
         pdf:
-          description: Le PDF, en base64
+          description: Le document, en base64 (un PDF, sauf autre format demandé)
           type: string
           contentEncoding: base64
+        format:
+          description: Format du document
+          type: string
         size:
-          description: Taille du PDF, en octets
+          description: Taille du document, en octets
           type: integer
         engine:
           description: Moteur utilisé, standard (LibreOffice), overlay (moteur rapide, calque posé sur un fond déjà rendu) ou native (copie Typst du modèle)

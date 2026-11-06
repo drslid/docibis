@@ -138,6 +138,40 @@ func TestRecycle(t *testing.T) {
 	}
 }
 
+// Recycle replaces every worker, so new fonts are seen.
+func TestRecycleAll(t *testing.T) {
+	p := start(t, Options{Workers: 2, QueueSize: 5, Timeout: 5 * time.Second})
+	pids := func() map[int]bool {
+		p.mu.Lock()
+		defer p.mu.Unlock()
+		out := map[int]bool{}
+		for w := range p.workers {
+			out[w.cmd.Process.Pid] = true
+		}
+		return out
+	}
+	old := pids()
+	p.Recycle()
+	for i := range 3 {
+		if err := convert(t, p, "doc"+string(rune('a'+i))); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for deadline := time.Now().Add(5 * time.Second); ; time.Sleep(20 * time.Millisecond) {
+		now := pids()
+		fresh := len(now) == 2
+		for pid := range now {
+			fresh = fresh && !old[pid]
+		}
+		if fresh {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("workers not replaced: before %v, now %v", old, now)
+		}
+	}
+}
+
 func TestBusy(t *testing.T) {
 	p := start(t, Options{Workers: 1, QueueSize: 0, Timeout: 2 * time.Second})
 	done := make(chan error)
