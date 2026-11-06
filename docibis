@@ -13,7 +13,9 @@
 #   docibis config [KEY=VALUE]  edit .env (or set values), then apply
 #   docibis db move URL         move the database to PostgreSQL (postgres://…)
 #
-# DOCIBIS_DIR is the installation folder (/opt/docibis).
+# DOCIBIS_DIR is the installation folder (/opt/docibis); DOCIBIS_INSTALLER, a
+# local install.sh for docibis update; DOCIBIS_WAIT, the seconds the API has
+# to become ready (180).
 set -euo pipefail
 
 DIR=${DOCIBIS_DIR:-/opt/docibis}
@@ -25,7 +27,7 @@ say() { printf '%s==>%s %s\n' "$bold" "$plain" "$*"; }
 die() { printf '%sxx%s  %s\n' "$bold" "$plain" "$*" >&2; exit 1; }
 
 usage() {
-  sed -n '2,17p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '2,19p' "$0" | sed 's/^# \{0,1\}//'
   exit 2
 }
 
@@ -51,9 +53,10 @@ env_set() {
   mv "$tmp" .env
 }
 
-# healthy: waits up to 3 minutes for the API to be ready.
+# healthy: waits for the API to be ready.
 healthy() {
-  for _ in $(seq 90); do
+  local end=$((SECONDS + ${DOCIBIS_WAIT:-180}))
+  while ((SECONDS < end)); do
     compose exec -T api docibis healthcheck ready >/dev/null 2>&1 && return 0
     sleep 2
   done
@@ -138,7 +141,11 @@ cmd_update() {
   say "Installing $target"
   local installer
   installer=$(mktemp)
-  curl -fsSL "https://raw.githubusercontent.com/$REPO/$target/install.sh" -o "$installer" || die "No installer for $target: nothing changed."
+  if [[ -n ${DOCIBIS_INSTALLER:-} ]]; then
+    cp "$DOCIBIS_INSTALLER" "$installer" || die "No installer at $DOCIBIS_INSTALLER: nothing changed."
+  else
+    curl -fsSL "https://raw.githubusercontent.com/$REPO/$target/install.sh" -o "$installer" || die "No installer for $target: nothing changed."
+  fi
   if DOCIBIS_YES=1 DOCIBIS_REF=$target DOCIBIS_DIR=$DIR DOCIBIS_REPO=$REPO bash "$installer" && healthy; then
     rm -f "$installer"
     say "Updated: $(in_api version)"
