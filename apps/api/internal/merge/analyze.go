@@ -52,6 +52,7 @@ func Analyze(template []byte) (Analysis, error) {
 	unsupported := map[string]bool{}
 	refs := false
 	family := familyOf(zr)
+	objects, charts := chartObjects(zr), 0
 	for _, f := range zr.File {
 		if !parts[f.Name] {
 			continue
@@ -73,6 +74,10 @@ func Analyze(template []byte) (Analysis, error) {
 				a.Shapes++
 			case n.name == "text:bookmark-start" && strings.HasPrefix(n.attr("text:name"), "imgfit_"):
 				a.Images++
+			case n.name == "draw:object":
+				if m := objectRef.FindStringSubmatch(n.attr("xlink:href")); m != nil && objects[m[1]] {
+					charts++
+				}
 			}
 			return true
 		})
@@ -162,6 +167,8 @@ func Analyze(template []byte) (Analysis, error) {
 		a.Engine, a.Reason = "standard", "syntaxe pas encore prise en charge : "+strings.Join(a.Unsupported, ", ")
 	case refs:
 		a.Engine, a.Reason = "standard", "blocs partagés (<<ref:…>>) : leur texte vient d'autres modèles"
+	case charts > 0:
+		a.Engine, a.Reason = "standard", count(charts, "graphique", "graphiques")+" : LibreOffice les dessine"
 	case a.Repeats == 0 && a.BlockSections == 0 && a.FlowFields == 0:
 		a.Engine, a.Reason = "overlay", "mise en page fixe : "+count(a.Fields, "champ en bout de ligne", "champs en bout de ligne")+", "+
 			count(a.Checkboxes, "case", "cases")+", "+count(a.Images, "image", "images")

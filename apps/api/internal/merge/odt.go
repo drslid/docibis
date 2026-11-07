@@ -99,8 +99,13 @@ func Fill(template []byte, data []byte, o Options) ([]byte, error) {
 			}
 		}
 	}
+	added, copies, err := m.placeCharts(zr, trees)
+	if err != nil {
+		return nil, err
+	}
 	merged := map[string][]byte{}
 	for name, tree := range trees {
+		stripChartMarks(tree)
 		merged[name] = tree.bytes()
 	}
 
@@ -123,12 +128,12 @@ func Fill(template []byte, data []byte, o Options) ([]byte, error) {
 			if content, err = withMeta(raw, o.Meta); err != nil {
 				return nil, fmt.Errorf("meta.xml: %w", err)
 			}
-		case f.Name == "META-INF/manifest.xml" && len(m.pictures) > 0:
+		case f.Name == "META-INF/manifest.xml" && (len(m.pictures) > 0 || len(copies) > 0):
 			raw, err := read(f)
 			if err != nil {
 				return nil, err
 			}
-			content = manifest(raw, m.pictures)
+			content = withObjects(manifest(raw, m.pictures), copies)
 		default:
 			if err := zw.Copy(f); err != nil {
 				return nil, err
@@ -141,6 +146,15 @@ func Fill(template []byte, data []byte, o Options) ([]byte, error) {
 	}
 	// Deflated: LibreOffice refuses stored entries followed by a data
 	// descriptor, which zip.Writer writes when it streams.
+	for _, a := range added {
+		data := a.data
+		if a.tree != nil {
+			data = a.tree.bytes()
+		}
+		if err := write(zw, a.name, zip.Deflate, data, now); err != nil {
+			return nil, err
+		}
+	}
 	for _, p := range m.pictures {
 		if err := write(zw, p.path, zip.Deflate, p.data, now); err != nil {
 			return nil, err

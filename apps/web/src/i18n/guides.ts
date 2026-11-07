@@ -80,6 +80,7 @@ export const guideFr = {
   'sheet.words': 'Un montant en toutes lettres, en euros',
   'sheet.barcode': 'Un code-barres (code128, ean13, datamatrix…)',
   'sheet.image': "Nom d'un signet Word placé autour d'une image : elle est remplacée par l'image « logo » des données",
+  'sheet.chart': 'Nom d\'un graphique Word ou PowerPoint (volet Sélection) : il montre les catégories et séries de « ventes »',
 
   'first.title': 'Premiers pas',
   'first.progress': '{done} sur {total}',
@@ -207,6 +208,7 @@ export const guideEn: Record<GuideKey, string> = {
   'sheet.words': 'An amount in words, in euros',
   'sheet.barcode': 'A barcode (code128, ean13, datamatrix…)',
   'sheet.image': 'Name of a Word bookmark around an image: it is replaced by the “logo” image of the data',
+  'sheet.chart': 'Name of a Word or PowerPoint chart (Selection pane): it shows the categories and series of “ventes”',
 
   'first.title': 'First steps',
   'first.progress': '{done} of {total}',
@@ -332,6 +334,7 @@ export const guideDe: Record<GuideKey, string> = {
   'sheet.words': 'Ein Betrag in Worten, in Euro',
   'sheet.barcode': 'Ein Barcode (code128, ean13, datamatrix…)',
   'sheet.image': 'Name einer Word-Textmarke um ein Bild: es wird durch das Bild „logo“ der Daten ersetzt',
+  'sheet.chart': 'Name eines Word- oder PowerPoint-Diagramms (Auswahlbereich): es zeigt die Kategorien und Reihen von „ventes“',
 
   'first.title': 'Erste Schritte',
   'first.progress': '{done} von {total}',
@@ -457,6 +460,7 @@ export const guideIt: Record<GuideKey, string> = {
   'sheet.words': 'Un importo in lettere, in euro',
   'sheet.barcode': 'Un codice a barre (code128, ean13, datamatrix…)',
   'sheet.image': "Nome di un segnalibro Word intorno a un'immagine: è sostituita dall'immagine «logo» dei dati",
+  'sheet.chart': 'Nome di un grafico Word o PowerPoint (riquadro Selezione): mostra le categorie e le serie di «ventes»',
 
   'first.title': 'Primi passi',
   'first.progress': '{done} su {total}',

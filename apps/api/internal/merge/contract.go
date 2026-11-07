@@ -55,6 +55,15 @@ func Fields(template []byte) ([]Field, error) {
 			if name := n.attr("text:name"); n.name == "text:bookmark-start" && strings.HasPrefix(name, "imgfit_") {
 				add(strings.TrimPrefix(name, "imgfit_"), "image", true)
 			}
+			if spec := chartField(n); n.name == "draw:frame" && spec != "" && chartObject(n) != "" {
+				path, fields := chartSpec(spec)
+				add(path, "chart", true)
+				if len(fields) >= 2 {
+					for _, f := range fields {
+						add(path+"[]."+f, "text", true)
+					}
+				}
+			}
 			return true
 		})
 		var lists []string

@@ -97,3 +97,48 @@ func TestOfficeTemplates(t *testing.T) {
 		}
 	}
 }
+
+// A Word template with charts is prepared and produced under a name that
+// makes the worker open its charts; its embedded objects are checked.
+func TestWordCharts(t *testing.T) {
+	odt, err := os.ReadFile("../merge/testdata/rapport.odt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv, setup := open(t, nil)
+	c := &client{t: t, h: srv.Handler()}
+	if code, _, _ := c.do(http.MethodPost, "/api/auth/setup", map[string]string{"setupCode": setup.String(), "username": "admin", "password": "a long enough password"}); code != http.StatusOK {
+		t.Fatalf("setup: %d", code)
+	}
+	fake := &fakeRenderer{odt: odt}
+	srv.SetRenderer(fake)
+
+	docx := docxTemplate(t, "", "word/charts/chart1.xml", "<c:chartSpace/>")
+	code, body, _ := c.upload("/api/try/analyze", "rapport.docx", docx, nil)
+	if analysis, _ := body["analysis"].(map[string]any); code != http.StatusOK || fake.in != "template.charts.docx" || !strings.Contains(fmt.Sprint(analysis["reason"]), "graphique") {
+		t.Fatalf("analyze: %d %v %s", code, body, fake.in)
+	}
+	data := `{"ventes": {"categories": ["T1", "T2"], "values": [3, 4]}}`
+	code, body, _ = c.upload("/api/try/render", "rapport.docx", docx, map[string]string{"data": data})
+	if code != http.StatusOK || fake.in != "merged.charts.odt" {
+		t.Fatalf("render: %d %v %s", code, body, fake.in)
+	}
+	if code, _, _ := c.upload("/api/try/analyze", "simple.docx", docxTemplate(t, ""), nil); code != http.StatusOK || fake.in != "template.docx" {
+		t.Fatalf("without charts: %d %s", code, fake.in)
+	}
+
+	// Without charts, the objects of a Word file stay closed: not checked.
+	if code, body, _ := c.upload("/api/try/analyze", "ole.docx", docxTemplate(t, "", "word/embeddings/oleObject1.bin", "x"), nil); code != http.StatusOK {
+		t.Fatalf("object without charts: %d %v", code, body)
+	}
+	for name, file := range map[string][]byte{
+		"graphique-ole.docx": docxTemplate(t, "", "word/charts/chart1.xml", "<c:chartSpace/>", "word/embeddings/oleObject1.bin", "x"),
+		"graphique-ole.odt": zipOf(t, "mimetype", "application/vnd.oasis.opendocument.text",
+			"META-INF/manifest.xml", `<manifest:manifest><manifest:file-entry manifest:full-path="Object 1/" manifest:media-type="application/vnd.oasis.opendocument.chart"/></manifest:manifest>`,
+			"content.xml", `<office:document-content><draw:frame><draw:object-ole xlink:href="./Object 2"/></draw:frame></office:document-content>`),
+	} {
+		if code, body, _ := c.upload("/api/try/analyze", name, file, nil); code != http.StatusBadRequest {
+			t.Errorf("%s must be refused: %d %v", name, code, body)
+		}
+	}
+}

@@ -23,6 +23,7 @@ const TAGS: [string, Key][] = [
   ['<<{qrcode(contrat.lien)}>>', 'sheet.qr'],
   ["<<{barcode(colis.numero, 'code128')}>>", 'sheet.barcode'],
   ['imgfit_logo', 'sheet.image'],
+  ['chart_ventes', 'sheet.chart'],
 ]
 
 /** The syntax of the tags at hand, while writing or trying a template. */

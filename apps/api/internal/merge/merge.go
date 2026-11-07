@@ -105,6 +105,8 @@ type merger struct {
 	mark     func(i int, tag string) string
 	marked   int
 	pictures []picture // images added to the package
+	// chartFills are the charts filled with data, placed once the parts are merged.
+	chartFills []chartFill
 	// copies counts the repeated rows and sections, bounded by maxCopies.
 	copies int
 	// breaks numbers the styles added (page breaks, wider columns).
@@ -143,6 +145,7 @@ func (m *merger) process(root *node, s scope) {
 	m.conditionalColumns(root, s)
 	m.sections(root, s)
 	m.images(root, s)
+	m.charts(root, s)
 	m.pageBreaks(root, s)
 	m.fields(root, s)
 }

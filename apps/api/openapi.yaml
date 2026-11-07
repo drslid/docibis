@@ -3769,7 +3769,7 @@ components:
           type: string
         kind:
           type: string
-          enum: [text, flag, list, image]
+          enum: [text, flag, list, image, chart]
         optional:
           description: Lu seulement dans des sections conditionnelles
           type: boolean

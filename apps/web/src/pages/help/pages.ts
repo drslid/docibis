@@ -455,6 +455,28 @@ LibreOffice produit toujours ces documents.
 - **Refusés** : les macros, les liaisons à d'autres fichiers, les connexions de données et les
   formules qui appellent une adresse (\`WEBSERVICE\`, \`DDE\`).
 
+## Graphiques
+
+Un graphique de Word ou de PowerPoint montre les données du document : donnez-lui le nom
+\`chart_ventes\` (volet Sélection, ou texte de remplacement). DocIbis remplace ses catégories et
+ses séries ; le modèle garde le type de graphique, les couleurs et la mise en forme.
+
+\`\`\`json
+"ventes": {"categories": ["T1", "T2", "T3"],
+           "series": [{"name": "2025", "values": [120, 150, 90]}, {"name": "2026", "values": [130, 160, 95]}]}
+\`\`\`
+
+- **Une seule série** : \`"values": [120, 150, 90]\` à la place de \`series\` ; elle garde le nom
+  du modèle.
+- **Depuis une liste** : nommé \`chart_ventes(trimestre, montant)\`, le graphique lit la liste
+  \`ventes\`, celle d'un tableau \`<<rr_ventes>>\` par exemple : le premier champ donne les
+  catégories, chacun des suivants une série.
+- Une série de plus que dans le modèle prend une couleur à elle ; le titre du graphique peut
+  porter des balises (\`Ventes <<annee>>\`).
+- Sans données, le graphique disparaît, comme une image. Dans une répétition, chaque copie a
+  son graphique.
+- Les graphiques d'un classeur Excel lisent la feuille : ils suivent ses lignes répétées.
+
 ## Vérificateur
 
 À chaque nouvelle version, DocIbis vérifie le modèle avant toute donnée : balises
@@ -530,7 +552,7 @@ confiance » la clé publique de REC, affichée dans Configuration, Environnemen
 
 export const HELP_PAGES: HelpPage[] = [
   { slug: 'demarrer', title: 'Bien démarrer', summary: 'Rôles, essai d’un modèle, suivi de la production.', icon: BookOpen, colour: 'text-teal-500', content: () => start },
-  { slug: 'syntaxe', title: 'Écrire un modèle', summary: 'Champs, formats, conditions, répétitions, images, codes QR, Excel et PowerPoint, liasses.', icon: PenLine, colour: 'text-amber-500', content: syntax },
+  { slug: 'syntaxe', title: 'Écrire un modèle', summary: 'Champs, formats, conditions, répétitions, images, codes QR, Excel et PowerPoint, graphiques, liasses.', icon: PenLine, colour: 'text-amber-500', content: syntax },
   { slug: 'docmosis', title: 'Passer de Docmosis à DocIbis', summary: 'Bibliothèque de modèles, route /api/render, références, options.', icon: FileStack, colour: 'text-blue-600', content: docmosis },
   { slug: 'api', title: "Utiliser l'API", summary: 'Clé, appel de /v1/render, exemples en 7 langages, erreurs, rendu en arrière-plan.', icon: Code2, colour: 'text-violet-500', content: api },
   { slug: 'mcp', title: 'Serveur MCP', summary: 'Brancher Claude, VS Code ou Cursor sur DocIbis.', icon: Bot, colour: 'text-indigo-500', content: mcp },

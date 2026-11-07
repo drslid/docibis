@@ -49,6 +49,21 @@ A workbook (`.xlsx`, `.ods`) or a presentation (`.pptx`, `.odp`) takes the same 
 - **Formats**: a workbook gives PDF, `xlsx` or `ods`; a presentation PDF, `pptx` or `odp`.
 - **Refused**: macros, links to other files, data connections, OLE objects and formulas that call an address (`WEBSERVICE`, `DDE`), embedded objects included.
 
+## Charts
+
+A Word or PowerPoint chart shows the data of the document: name it `chart_sales` (Selection pane, or alt text). DocIbis replaces its categories and series; the template keeps the chart type, colours and layout.
+
+```json
+"sales": {"categories": ["Q1", "Q2", "Q3"],
+          "series": [{"name": "2025", "values": [120, 150, 90]}, {"name": "2026", "values": [130, 160, 95]}]}
+```
+
+- **One series**: `"values": [120, 150, 90]` instead of `series`; it keeps the name of the template.
+- **From a list**: named `chart_sales(quarter, amount)`, the chart reads the list `sales`, the one of a `<<rr_sales>>` table for example: the first field gives the categories, each other one a series.
+- A series beyond those of the template gets a colour of its own; the chart title takes tags (`Sales <<year>>`).
+- Without data, the chart goes, as an image does. In a repeat, each copy has its own chart.
+- The charts of an Excel workbook read the sheet: they follow its repeated rows.
+
 ## What you get
 
 The example invoice and its data give this PDF, with the rows repeated and the totals formatted:

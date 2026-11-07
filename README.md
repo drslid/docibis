@@ -99,6 +99,7 @@ curl -H "Authorization: Bearer $DOCIBIS_API_KEY" \
 - Bundles (several templates and PDF files in one document) and batch rendering.
 - PDF, DOCX, PDF/A-1b, 2b and 3b, accessible PDF (PDF/UA-1, checked with veraPDF), watermarks, passwords and permissions.
 - Excel and PowerPoint templates: repeated rows carry their formulas, sums and charts cover every row produced, LibreOffice computes the workbook again; output in PDF, XLSX, ODS, PPTX or ODP.
+- Charts filled from the data in Word and PowerPoint templates: name a chart `chart_sales` and send its categories and series, or point it at the list of a table.
 - A fast engine for fixed-layout templates, qualified automatically, in about a millisecond per document.
 - A native engine: a Typst copy of a template version, compared page by page with LibreOffice before it is used, renders in a few milliseconds; any new Word version falls back to LibreOffice until its copy is checked again.
 - Background rendering: `POST /v1/render/async` answers at once with a job; the document is read later, uploaded to a presigned S3 address, and a signed callback (HMAC, `WEBHOOK_SECRET`) tells the end.

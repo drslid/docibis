@@ -19,6 +19,7 @@ import (
 	"path"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -234,6 +235,22 @@ var (
 // LibreOffice would run them when it computes the sheet.
 var callsOut = regexp.MustCompile(`(?i)\bWEBSERVICE\s*\(|\bDDE\s*\(`)
 
+// chartType is the type of a chart object in the manifest of an OpenDocument file.
+const chartType = "application/vnd.oasis.opendocument.chart"
+
+// withCharts names the files of text documents with charts so that the
+// worker opens their embedded objects (it keeps them out of the others).
+func withCharts(name string) string {
+	base, ext, _ := strings.Cut(name, ".")
+	return base + ".charts." + ext
+}
+
+// hasPart tells whether a zip holds a file under prefix.
+func hasPart(raw []byte, prefix string) bool {
+	zr, err := zip.NewReader(bytes.NewReader(raw), int64(len(raw)))
+	return err == nil && slices.ContainsFunc(zr.File, func(f *zip.File) bool { return strings.HasPrefix(f.Name, prefix) })
+}
+
 // checkTemplate accepts a Word, Excel or PowerPoint file, or an OpenDocument
 // one, without macros, without links to outside files or addresses
 // (LibreOffice would fetch them) and of reasonable size once unpacked. It
@@ -254,12 +271,18 @@ func checkPackage(name string, raw []byte, depth int) (string, error) {
 	}
 	var total uint64
 	kind := ""
+	charts := false
 	for _, f := range zr.File {
 		total += f.UncompressedSize64
 		name := strings.ToLower(f.Name)
 		switch {
 		case officeKinds[name] != "":
 			kind = officeKinds[name]
+		case strings.HasPrefix(name, "word/charts/"):
+			charts = true
+		case name == "meta-inf/manifest.xml":
+			m, err := readZip(f, 10<<20)
+			charts = charts || err == nil && bytes.Contains(m, []byte(chartType))
 		case name == "mimetype":
 			if m, err := readZip(f, 100); err == nil {
 				for family, k := range odfKinds {
@@ -281,6 +304,8 @@ func checkPackage(name string, raw []byte, depth int) (string, error) {
 		return "", notTemplate
 	}
 	office := kind == "docx" || kind == "xlsx" || kind == "pptx"
+	// LibreOffice opens the embedded objects of these templates, to draw their charts.
+	opens := charts || kind == "xlsx" || kind == "pptx" || kind == "ods" || kind == "odp"
 	for _, f := range zr.File {
 		if !office || !strings.HasSuffix(f.Name, ".rels") {
 			continue
@@ -298,9 +323,9 @@ func checkPackage(name string, raw []byte, depth int) (string, error) {
 	}
 	for _, f := range zr.File {
 		name := strings.ToLower(f.Name)
-		// LibreOffice opens the objects of a sheet or a slide to draw them (the
-		// data of a chart): each one is checked as a template in turn.
-		if (kind == "xlsx" || kind == "pptx") && (strings.Contains(name, "/embeddings/") || strings.Contains(name, "/activex/")) {
+		// LibreOffice opens the objects of a sheet, a slide or a chart to draw
+		// them (the data of a chart): each one is checked as a template in turn.
+		if office && opens && (strings.Contains(name, "/embeddings/") || strings.Contains(name, "/activex/")) {
 			inner, err := readZip(f, maxUnpacked)
 			if err != nil {
 				return "", refuse("Le modèle est abîmé (%s).", f.Name)
@@ -330,7 +355,7 @@ func checkPackage(name string, raw []byte, depth int) (string, error) {
 		if formulas && callsOut.Match(part) {
 			return "", refuse("Le modèle a une formule qui appelle une adresse ou une autre application (WEBSERVICE, DDE) : il est refusé.")
 		}
-		if (kind == "ods" || kind == "odp") && bytes.Contains(part, []byte("<draw:object-ole")) {
+		if !office && opens && bytes.Contains(part, []byte("<draw:object-ole")) {
 			return "", refuse("Le modèle contient un objet que DocIbis ne sait pas vérifier (objet OLE) : il est refusé.")
 		}
 	}
@@ -458,6 +483,9 @@ func (s *Server) prepare(ctx context.Context, r Renderer, f tryForm, kind, dir s
 		return odt, 0, nil
 	}
 	in, out := filepath.Join(dir, as[0]), filepath.Join(dir, "template."+as[1])
+	if kind == "docx" && hasPart(f.template, "word/charts/") {
+		in = filepath.Join(dir, withCharts(as[0]))
+	}
 	if err := os.WriteFile(in, f.template, 0o600); err != nil {
 		return nil, 0, err
 	}
@@ -742,7 +770,11 @@ func (s *Server) produceDocument(ctx context.Context, f tryForm, format string) 
 	if ext == "" {
 		ext = "odt"
 	}
-	in, out := filepath.Join(dir, "merged."+ext), filepath.Join(dir, "document."+doc.format)
+	name := "merged." + ext
+	if family == "text" && merge.HasCharts(merged) {
+		name = withCharts(name)
+	}
+	in, out := filepath.Join(dir, name), filepath.Join(dir, "document."+doc.format)
 	if err := os.WriteFile(in, merged, 0o600); err != nil {
 		return doc, err
 	}

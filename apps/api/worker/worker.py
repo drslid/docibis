@@ -29,8 +29,9 @@ FILTERS = {
 }
 KINDS = (("spreadsheet", "com.sun.star.sheet.SpreadsheetDocument"),
          ("presentation", "com.sun.star.presentation.PresentationDocument"))
-# Spreadsheets and presentations, by the name the server gives them: their
-# charts are kept; text documents keep every embedded object out.
+# Spreadsheets and presentations, by the name the server gives them, and the
+# text documents it names *.charts.*: their charts are kept; other text
+# documents keep every embedded object out.
 WITH_CHARTS = (".xlsx", ".ods", ".pptx", ".odp")
 # UTF-8 text without BOM and with Unix line ends; HTML with its images inside.
 FILTER_OPTIONS = {"txt": "UTF8,LF,,,false", "html": "EmbedImages"}
@@ -124,7 +125,8 @@ class Office:
     def convert(self, src, dst, fmt, options):
         if not any(fmt in table for table in FILTERS.values()):
             raise ValueError(f"unknown format {fmt!r}")
-        self.allow_objects(os.path.splitext(src)[1].lower() in WITH_CHARTS)
+        name = os.path.basename(src).lower()
+        self.allow_objects(name.endswith(WITH_CHARTS) or ".charts." in name)
         # Hidden, no macro, no link update: nothing runs or loads behind the template's back.
         doc = self.desktop.loadComponentFromURL(
             uno.systemPathToFileUrl(src), "_blank", 0,

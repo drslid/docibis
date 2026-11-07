@@ -36,6 +36,10 @@ func Sample(template []byte) (map[string]any, error) {
 			if name := n.attr("text:name"); n.name == "text:bookmark-start" && strings.HasPrefix(name, "imgfit_") {
 				set(data, strings.TrimPrefix(name, "imgfit_"), exampleImage())
 			}
+			if spec, object := chartField(n), chartObject(n); n.name == "draw:frame" && spec != "" && object != "" {
+				path, fields := chartSpec(spec)
+				set(data, path, chartSample(zr, object, fields))
+			}
 			return true
 		})
 		var lists []map[string]any // the item each repeat fills

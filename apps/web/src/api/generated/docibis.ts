@@ -1078,6 +1078,7 @@ export const TemplateFieldKind = {
   flag: 'flag',
   list: 'list',
   image: 'image',
+  chart: 'chart',
 } as const;
 
 export interface TemplateField {
