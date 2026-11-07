@@ -27,7 +27,7 @@ RUN printf 'package main\n\nimport (\n\tcaddycmd "github.com/caddyserver/caddy/v
  && CGO_ENABLED=0 GOARCH=${TARGETARCH} go build -trimpath -ldflags "-s -w" -o /out/caddy . \
  && go version -m /out/caddy | grep -q "caddyserver/caddy/v2"
 
-FROM ${CADDY_IMAGE}
+FROM ${CADDY_IMAGE} AS runtime
 LABEL org.opencontainers.image.title="DocIbis console" \
       org.opencontainers.image.source="https://github.com/drslid/docibis" \
       org.opencontainers.image.licenses="MIT"

@@ -43,7 +43,9 @@ jobs:
             type=ref,event=tag
             type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
       # Known vulnerabilities of the image: those with a published fix stop
-      # the release before the push; the others are listed in the log.
+      # the release before the push; the others are listed in the log. The
+      # runtime stage, which installs the system packages, never comes from
+      # the cache: it would keep versions without the latest security fixes.
       - name: Build for the scan
         uses: docker/build-push-action@v6
         with:
@@ -52,11 +54,12 @@ jobs:
           load: true
           tags: docibis-${{ matrix.app }}:scan
           cache-from: type=gha,scope=${{ matrix.app }}
+          no-cache-filters: runtime
       - name: Trivy
         run: |
           trivy() { docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v trivy-cache:/root/.cache/trivy ghcr.io/aquasecurity/trivy:0.76.1 "$@"; }
-          trivy image --scanners vuln --severity HIGH,CRITICAL "docibis-${{ matrix.app }}:scan"
-          trivy image --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 --skip-db-update "docibis-${{ matrix.app }}:scan"
+          trivy image --timeout 30m --scanners vuln --severity HIGH,CRITICAL "docibis-${{ matrix.app }}:scan"
+          trivy image --timeout 30m --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 --skip-db-update "docibis-${{ matrix.app }}:scan"
       # amd64 and arm64 (AWS Graviton, Ampere…): the arm64 steps that run
       # commands are emulated.
       - uses: docker/build-push-action@v6
@@ -68,3 +71,4 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha,scope=${{ matrix.app }}
           cache-to: type=gha,mode=max,scope=${{ matrix.app }}
+          no-cache-filters: runtime
