@@ -10,7 +10,7 @@ import { HelpTip } from '@/components/help/HelpTip'
 import { TagCheatSheet } from '@/components/help/TagCheatSheet'
 import { LintList } from '@/components/library/LintList'
 import { DataForm, type Json } from '@/components/try/DataForm'
-import { FORMATS, NO_PDF_SETTINGS, PdfOptions, pdfSettingsForm } from '@/components/try/PdfOptions'
+import { familyOf, FORMATS, NO_PDF_SETTINGS, PdfOptions, pdfSettingsForm, TEMPLATE_FILES } from '@/components/try/PdfOptions'
 import { useI18n, type Key } from '@/i18n/useI18n'
 
 const ENGINES: Record<string, { label: Key; fast: boolean }> = {
@@ -53,6 +53,8 @@ export function TryPage() {
   const { data: templates } = useListTemplates(undefined, { query: { retry: false } })
   const published = (templates ?? []).filter((x) => x.kind === 'template' && x.published > 0)
   const template: TryTemplate | undefined = library ? undefined : analyze.data
+  const family = familyOf(library?.path ?? file?.name)
+  const formats = FORMATS.filter((f) => !f.family || f.family === family)
 
   useEffect(() => () => { if (pdf) URL.revokeObjectURL(pdf.url) }, [pdf])
 
@@ -67,9 +69,15 @@ export function TryPage() {
   }, [data, t])
   const formValue = useMemo(() => (dataError ? undefined : (JSON.parse(data) as Record<string, Json>)), [data, dataError])
 
+  // A template gives the formats of its kind only: PDF stays when the kind changes.
+  function keepFormat(name: string) {
+    setFormat((current) => (FORMATS.some((f) => f.value === current && (!f.family || f.family === familyOf(name))) ? current : 'pdf'))
+  }
+
   function choose(f: File, preset?: string) {
     setFile(f)
     setLibrary(undefined)
+    keepFormat(f.name)
     setPdf(undefined)
     render.reset()
     analyze.mutate({ data: { template: f } }, { onSuccess: (tpl) => setData(preset ?? JSON.stringify(tpl.sample, null, 2)) })
@@ -79,6 +87,7 @@ export function TryPage() {
     const chosen = published.find((x) => x.path === path)
     setLibrary(chosen)
     setFile(undefined)
+    keepFormat(path)
     setPdf(undefined)
     render.reset()
     analyze.reset()
@@ -126,7 +135,7 @@ export function TryPage() {
   }
 
   const engine = template ? ENGINES[template.analysis.engine] : undefined
-  const baseName = ((library ? library.path.split('/').pop() : file?.name) ?? 'document').replace(/\.(docx|odt)$/i, '')
+  const baseName = ((library ? library.path.split('/').pop() : file?.name) ?? 'document').replace(/\.(docx|odt|xlsx|ods|pptx|odp)$/i, '')
   const shown = pdf?.result.format ?? 'pdf'
 
   return (
@@ -153,7 +162,7 @@ export function TryPage() {
               <input
                 ref={input}
                 type="file"
-                accept=".docx,.odt"
+                accept={TEMPLATE_FILES}
                 className="hidden"
                 aria-label={t('try.templateLabel')}
                 onChange={(e) => { const f = e.target.files?.[0]; if (f) choose(f); e.target.value = '' }}
@@ -258,7 +267,7 @@ export function TryPage() {
                 <div className="sm:col-span-2">
                   <label className="label" htmlFor="try-format">{t('try.format')}</label>
                   <select id="try-format" className="input" value={format} onChange={(e) => setFormat(e.target.value)}>
-                    {FORMATS.map((f) => <option key={f.value} value={f.value}>{f.label || t('history.text')}</option>)}
+                    {formats.map((f) => <option key={f.value} value={f.value}>{f.label || t('history.text')}</option>)}
                   </select>
                   {format !== 'pdf' && <p className="text-xs text-gray-400 mt-1">{t('try.pdfOnly')}</p>}
                 </div>

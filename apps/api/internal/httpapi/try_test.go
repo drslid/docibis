@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -26,8 +27,10 @@ type fakeRenderer struct {
 	calls map[string]int
 	odt   []byte
 	err   error
-	// filter is the last PDF export options received.
+	// filter is the last PDF export options received; in the name of the
+	// last file converted.
 	filter string
+	in     string
 }
 
 func (f *fakeRenderer) Convert(_ context.Context, in, out, format, filter string) (time.Duration, error) {
@@ -37,13 +40,15 @@ func (f *fakeRenderer) Convert(_ context.Context, in, out, format, filter string
 		f.calls = map[string]int{}
 	}
 	f.calls[format]++
+	f.in = filepath.Base(in)
 	if format == "pdf" {
 		f.filter = filter
 	}
 	if f.err != nil {
 		return 0, f.err
 	}
-	if format == "odt" {
+	// Preparing an Office template gives the OpenDocument file of the test.
+	if format == "odt" || strings.HasPrefix(f.in, "template.") {
 		return time.Millisecond, os.WriteFile(out, f.odt, 0o600)
 	}
 	merged, err := os.ReadFile(in)
@@ -176,7 +181,7 @@ func TestTry(t *testing.T) {
 		"~$modele.docx":    docx,
 		"macros.docm":      docxTemplate(t, "", "word/vbaProject.bin", "x"),
 		"image-liee.docx":  docxTemplate(t, link+image),
-		"autre-chose.xlsx": zipOf(t, "xl/workbook.xml", "<workbook/>"),
+		"autre-chose.xlsb": zipOf(t, "xl/workbook.bin", "x"),
 	} {
 		if code, body, _ := c.upload("/api/try/analyze", name, file, nil); code != http.StatusBadRequest {
 			t.Fatalf("%s must be refused: %d %v", name, code, body)

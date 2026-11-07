@@ -21,8 +21,17 @@ import time
 import uno
 from com.sun.star.beans import PropertyValue
 
-FILTERS = {"pdf": "writer_pdf_Export", "docx": "MS Word 2007 XML", "odt": "writer8", "doc": "MS Word 97",
-           "rtf": "Rich Text Format", "html": "HTML (StarWriter)", "txt": "Text (encoded)"}
+FILTERS = {
+    "text": {"pdf": "writer_pdf_Export", "docx": "MS Word 2007 XML", "odt": "writer8", "doc": "MS Word 97",
+             "rtf": "Rich Text Format", "html": "HTML (StarWriter)", "txt": "Text (encoded)"},
+    "spreadsheet": {"pdf": "calc_pdf_Export", "xlsx": "Calc MS Excel 2007 XML", "ods": "calc8"},
+    "presentation": {"pdf": "impress_pdf_Export", "pptx": "Impress MS PowerPoint 2007 XML", "odp": "impress8"},
+}
+KINDS = (("spreadsheet", "com.sun.star.sheet.SpreadsheetDocument"),
+         ("presentation", "com.sun.star.presentation.PresentationDocument"))
+# Spreadsheets and presentations, by the name the server gives them: their
+# charts are kept; text documents keep every embedded object out.
+WITH_CHARTS = (".xlsx", ".ods", ".pptx", ".odp")
 # UTF-8 text without BOM and with Unix line ends; HTML with its images inside.
 FILTER_OPTIONS = {"txt": "UTF8,LF,,,false", "html": "EmbedImages"}
 # Export options in JSON, as LibreOffice writes them: {"SelectPdfVersion": {"type": "long", "value": "2"}}.
@@ -99,17 +108,23 @@ class Office:
                     raise RuntimeError("LibreOffice did not start")
                 time.sleep(0.05)
         self.desktop = context.ServiceManager.createInstanceWithContext("com.sun.star.frame.Desktop", context)
+        provider = context.ServiceManager.createInstanceWithContext("com.sun.star.configuration.ConfigurationProvider", context)
+        self.scripting = provider.createInstanceWithArguments(
+            "com.sun.star.configuration.ConfigurationUpdateAccess",
+            (prop("nodepath", "/org.openoffice.Office.Common/Security/Scripting"),))
+        self.active = False
+
+    def allow_objects(self, allowed):
+        """Charts are embedded objects, which DisableActiveContent drops."""
+        if allowed != self.active:
+            self.scripting.replaceByName("DisableActiveContent", not allowed)
+            self.scripting.commitChanges()
+            self.active = allowed
 
     def convert(self, src, dst, fmt, options):
-        name = FILTERS.get(fmt)
-        if name is None:
+        if not any(fmt in table for table in FILTERS.values()):
             raise ValueError(f"unknown format {fmt!r}")
-        export = [prop("FilterName", name), prop("Overwrite", True)]
-        if fmt in FILTER_OPTIONS:
-            export.append(prop("FilterOptions", FILTER_OPTIONS[fmt]))
-        data = filter_data(options)
-        if data:
-            export.append(prop("FilterData", uno.Any("[]com.sun.star.beans.PropertyValue", data)))
+        self.allow_objects(os.path.splitext(src)[1].lower() in WITH_CHARTS)
         # Hidden, no macro, no link update: nothing runs or loads behind the template's back.
         doc = self.desktop.loadComponentFromURL(
             uno.systemPathToFileUrl(src), "_blank", 0,
@@ -117,6 +132,19 @@ class Office:
         if doc is None:
             raise RuntimeError(f"cannot load {os.path.basename(src)}")
         try:
+            kind = next((k for k, service in KINDS if doc.supportsService(service)), "text")
+            name = FILTERS[kind].get(fmt)
+            if name is None:
+                raise ValueError(f"format {fmt!r} is not available for a {kind} document")
+            export = [prop("FilterName", name), prop("Overwrite", True)]
+            if fmt in FILTER_OPTIONS:
+                export.append(prop("FilterOptions", FILTER_OPTIONS[fmt]))
+            data = filter_data(options)
+            if data:
+                export.append(prop("FilterData", uno.Any("[]com.sun.star.beans.PropertyValue", data)))
+            if kind == "spreadsheet":
+                # The merge changed values and formulas: their results are computed again.
+                doc.calculateAll()
             args = uno.Any("[]com.sun.star.beans.PropertyValue", tuple(export))
             uno.invoke(doc, "storeToURL", (uno.systemPathToFileUrl(dst), args))
         finally:

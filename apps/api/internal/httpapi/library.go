@@ -317,7 +317,7 @@ func (s *Server) CreateTemplate(ctx context.Context, req CreateTemplateRequestOb
 	cfg := s.cfg.Load()
 	f, err := readLibraryForm(req.Body, map[string]int{"file": max(cfg.Int("max_template_size_mb"), maxReferenceMB)})
 	if err == nil && len(f.files["file"]) == 0 {
-		err = refuse("Choisissez le fichier du modèle (.docx, .odt) ou le PDF fixe.")
+		err = refuse("Choisissez le fichier du modèle (.docx, .xlsx, .pptx ou OpenDocument) ou le PDF fixe.")
 	}
 	var p string
 	if err == nil {
@@ -327,8 +327,8 @@ func (s *Server) CreateTemplate(ctx context.Context, req CreateTemplateRequestOb
 		}
 		p, err = cleanPath(p)
 	}
-	if err == nil && !slices.Contains([]string{".docx", ".odt", ".pdf", ".typ"}, strings.ToLower(path.Ext(p))) {
-		err = refuse("Le chemin doit finir par .docx, .odt, .pdf ou .typ : %q.", p)
+	if err == nil && !slices.Contains(templateExts, strings.ToLower(path.Ext(p))) {
+		err = refuse("Le chemin doit finir par %s : %q.", strings.Join(templateExts, ", "), p)
 	}
 	var t store.Template
 	if err == nil {
@@ -738,7 +738,7 @@ func readImport(raw []byte) (map[string]*importEntry, error) {
 		case strings.HasSuffix(lower, ".aliases.txt"):
 			e = entry(p[:len(p)-len(".aliases.txt")])
 			target = &e.aliases
-		case strings.HasSuffix(lower, ".docx") || strings.HasSuffix(lower, ".odt") || strings.HasSuffix(lower, ".pdf") || strings.HasSuffix(lower, ".typ"):
+		case slices.Contains(templateExts, strings.ToLower(path.Ext(lower))):
 			e = entry(p)
 			target = &e.file
 		default:
@@ -749,7 +749,7 @@ func readImport(raw []byte) (map[string]*importEntry, error) {
 		}
 	}
 	if len(entries) == 0 {
-		return nil, refuse("Le zip ne contient aucun modèle (.docx, .odt) ni PDF.")
+		return nil, refuse("Le zip ne contient aucun modèle (.docx, .xlsx, .pptx, OpenDocument) ni PDF.")
 	}
 	return entries, nil
 }

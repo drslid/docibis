@@ -85,6 +85,22 @@ paths:
               schema:
                 type: string
                 format: binary
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                format: binary
+            application/vnd.oasis.opendocument.spreadsheet:
+              schema:
+                type: string
+                format: binary
+            application/vnd.openxmlformats-officedocument.presentationml.presentation:
+              schema:
+                type: string
+                format: binary
+            application/vnd.oasis.opendocument.presentation:
+              schema:
+                type: string
+                format: binary
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -209,6 +225,22 @@ paths:
                 type: string
                 format: binary
             text/plain:
+              schema:
+                type: string
+                format: binary
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                format: binary
+            application/vnd.oasis.opendocument.spreadsheet:
+              schema:
+                type: string
+                format: binary
+            application/vnd.openxmlformats-officedocument.presentationml.presentation:
+              schema:
+                type: string
+                format: binary
+            application/vnd.oasis.opendocument.presentation:
               schema:
                 type: string
                 format: binary
@@ -418,6 +450,22 @@ paths:
                 type: string
                 format: binary
             text/plain:
+              schema:
+                type: string
+                format: binary
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                format: binary
+            application/vnd.oasis.opendocument.spreadsheet:
+              schema:
+                type: string
+                format: binary
+            application/vnd.openxmlformats-officedocument.presentationml.presentation:
+              schema:
+                type: string
+                format: binary
+            application/vnd.oasis.opendocument.presentation:
               schema:
                 type: string
                 format: binary
@@ -1018,7 +1066,7 @@ paths:
         - {name: q, in: query, description: "Texte cherché dans le modèle, l'auteur et l'erreur", schema: {type: string}}
         - {name: status, in: query, schema: {type: string, enum: [ok, refused, error]}}
         - {name: source, in: query, schema: {type: string, enum: [console, api, mcp]}}
-        - {name: format, in: query, schema: {type: string, enum: [pdf, docx, doc, odt, rtf, html, txt]}}
+        - {name: format, in: query, schema: {type: string, enum: [pdf, docx, doc, odt, rtf, html, txt, xlsx, ods, pptx, odp]}}
         - {name: limit, in: query, schema: {type: integer, minimum: 1, maximum: 200, default: 50}}
         - {name: offset, in: query, schema: {type: integer, minimum: 0, default: 0}}
       responses:
@@ -2183,6 +2231,22 @@ paths:
               schema:
                 type: string
                 format: binary
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                format: binary
+            application/vnd.oasis.opendocument.spreadsheet:
+              schema:
+                type: string
+                format: binary
+            application/vnd.openxmlformats-officedocument.presentationml.presentation:
+              schema:
+                type: string
+                format: binary
+            application/vnd.oasis.opendocument.presentation:
+              schema:
+                type: string
+                format: binary
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -3253,9 +3317,9 @@ components:
           description: Données JSON du document (texte ou fichier)
           type: string
         format:
-          description: Format du document produit
+          description: Format du document produit ; xlsx et ods pour un modèle Excel, pptx et odp pour un modèle PowerPoint
           type: string
-          enum: [pdf, docx, doc, odt, rtf, html, txt]
+          enum: [pdf, docx, doc, odt, rtf, html, txt, xlsx, ods, pptx, odp]
           default: pdf
         outputName:
           description: Nom du fichier rendu (Content-Disposition)
@@ -3373,7 +3437,7 @@ components:
           type: string
         format:
           type: string
-          enum: [pdf, docx, doc, odt, rtf, html, txt]
+          enum: [pdf, docx, doc, odt, rtf, html, txt, xlsx, ods, pptx, odp]
         size:
           description: Taille du document, en octets
           type: integer
@@ -3396,7 +3460,7 @@ components:
       properties:
         format:
           type: string
-          enum: [pdf, docx, doc, odt, rtf, html, txt]
+          enum: [pdf, docx, doc, odt, rtf, html, txt, xlsx, ods, pptx, odp]
         pdfa:
           type: string
           enum: [none, PDF/A-1b, PDF/A-2b, PDF/A-3b]
@@ -3500,7 +3564,7 @@ components:
         templateName:
           type: string
         outputName:
-          description: Nom du document ; son extension donne le format (pdf, docx, doc, odt, rtf, html, txt)
+          description: Nom du document ; son extension donne le format (pdf, docx, doc, odt, rtf, html, txt, xlsx, ods, pptx, odp)
           type: string
         outputFormat:
           type: string
@@ -3737,7 +3801,7 @@ components:
       required: [path]
       properties:
         path:
-          description: Nouveau chemin, avec son extension (.docx, .odt, .pdf, .typ)
+          description: Nouveau chemin, avec son extension (.docx, .odt, .xlsx, .ods, .pptx, .odp, .pdf, .typ)
           type: string
           maxLength: 300
     TemplateMerge:
@@ -4308,9 +4372,9 @@ components:
           description: Données JSON du document
           type: string
         format:
-          description: Format du document produit ; les options PDF ne valent que pour le PDF
+          description: Format du document produit ; les options PDF ne valent que pour le PDF ; xlsx et ods pour un modèle Excel, pptx et odp pour un modèle PowerPoint
           type: string
-          enum: [pdf, docx, doc, odt, rtf, html, txt]
+          enum: [pdf, docx, doc, odt, rtf, html, txt, xlsx, ods, pptx, odp]
           default: pdf
         pdfa:
           type: string

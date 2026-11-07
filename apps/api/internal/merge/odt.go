@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"regexp"
 	"strings"
 	"time"
 )
@@ -15,6 +16,10 @@ import (
 // Parts of an ODT that hold text with tags: the body, and the headers and
 // footers kept in the styles.
 var parts = map[string]bool{"content.xml": true, "styles.xml": true}
+
+// chartPart is the body of an embedded chart: its titles may hold fields, and
+// the ranges of a chart of a sheet follow the rows of the sheet.
+var chartPart = regexp.MustCompile(`^Object [0-9]+/content\.xml$`)
 
 // Options change how a document is filled.
 type Options struct {
@@ -52,10 +57,13 @@ func Fill(template []byte, data []byte, o Options) ([]byte, error) {
 		return nil, fmt.Errorf("template is not an ODT: %w", err)
 	}
 	now := o.Now
-	m := &merger{now: now, fetch: o.Fetch, mark: o.Mark, dev: o.Dev}
-	merged := map[string][]byte{}
+	family := familyOf(zr)
+	m := &merger{now: now, fetch: o.Fetch, mark: o.Mark, dev: o.Dev, sheet: family == "spreadsheet"}
+	trees := map[string]*node{}
+	var templateRows map[string]map[int]int
 	for _, f := range zr.File {
-		if !parts[f.Name] {
+		chart := chartPart.MatchString(f.Name) && o.Mark == nil
+		if !parts[f.Name] && !chart {
 			continue
 		}
 		raw, err := read(f)
@@ -67,15 +75,33 @@ func Fill(template []byte, data []byte, o Options) ([]byte, error) {
 			return nil, fmt.Errorf("%s: %w", f.Name, err)
 		}
 		normalize(tree)
-		if o.Dev {
+		if o.Dev && !chart {
 			addDevStyle(tree)
+		}
+		if m.sheet && f.Name == "content.xml" {
+			templateRows = markSheets(tree)
 		}
 		m.process(tree, scope{root})
 		if m.err != nil {
 			return nil, m.err
 		}
+		if family == "presentation" {
+			m.slideNames(tree, scope{root})
+		}
 		dropMarkerStyles(tree)
-		merged[f.Name] = tree.bytes()
+		trees[f.Name] = tree
+	}
+	if content := trees["content.xml"]; m.sheet && content != nil {
+		rows := finishSheets(content, templateRows)
+		for name, tree := range trees {
+			if chartPart.MatchString(name) {
+				tree.walk(func(n *node) bool { moveRanges(n, rows); return true })
+			}
+		}
+	}
+	merged := map[string][]byte{}
+	for name, tree := range trees {
+		merged[name] = tree.bytes()
 	}
 
 	// Same files in the same order (mimetype first), the merged parts, the

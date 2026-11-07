@@ -111,7 +111,11 @@ type merger struct {
 	breaks int
 	// dev highlights the fields that cannot be filled.
 	dev bool
-	err error
+	// sheet is set for a spreadsheet: the rows copied by a repeat carry the
+	// number of their item (items), for the formulas that read their own row.
+	sheet bool
+	items int
+	err   error
 }
 
 // maxCopies bounds the copies of repeated rows and sections in a document,
@@ -240,8 +244,12 @@ func (m *merger) repeatRows(o occurrence, s scope) {
 		scoped := s.item(i, len(list), item)
 		group := make([]*node, 0, len(kept))
 		at := last
+		m.items++
 		for _, r := range kept {
 			c := r.clone(nil)
+			if m.sheet {
+				c.setAttr(itemAttr, strconv.Itoa(m.items))
+			}
 			at.insertAfter(c)
 			at = c
 			group = append(group, c)

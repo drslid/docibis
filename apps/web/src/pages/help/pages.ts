@@ -141,7 +141,7 @@ Un administrateur crée les comptes dans **Utilisateurs** avec un mot de passe p
 
 ## Essayer un modèle
 
-1. Ouvrez **Essai** et déposez un modèle \`.docx\` (ou « Utiliser l'exemple »).
+1. Ouvrez **Essai** et déposez un modèle \`.docx\`, \`.xlsx\` ou \`.pptx\` (ou « Utiliser l'exemple »).
 2. DocIbis lit ses balises et propose des données d'exemple : ajustez-les.
 3. « Produire le PDF » affiche le document et son temps de production.
 
@@ -437,6 +437,24 @@ et gardées un moment en mémoire.
 Types : \`code128\`, \`code39\`, \`ean13\`, \`ean8\`, \`itf\`, \`codabar\`, \`datamatrix\`,
 \`pdf417\`, \`aztec\`, \`qr\`.
 
+## Modèles Excel et PowerPoint
+
+Un classeur Excel (\`.xlsx\`) ou une présentation PowerPoint (\`.pptx\`) se remplit avec les
+mêmes balises, écrites dans les cellules, les zones de texte et les titres des diapositives.
+LibreOffice produit toujours ces documents.
+
+- **Lignes répétées** : \`<<rr_lignes>>\` dans la première cellule d'une ligne de la feuille ou
+  d'un tableau et \`<<er_>>\` dans la dernière ; la ligne est répétée pour chaque élément.
+- **Nombres et dates** : une cellule qui ne contient qu'un champ (\`<<prix>>\`) reçoit un vrai
+  nombre, ou une vraie date pour une valeur \`2026-11-06\` : les formules savent les calculer.
+- **Formules et graphiques** d'un classeur : une formule de la ligne répétée (\`=B5*C5\`) se
+  recopie sur chaque ligne ; une somme ou un graphique qui couvre la ligne couvre toutes les
+  lignes produites. LibreOffice recalcule tout avant d'écrire le document.
+- **Formats** : un classeur se produit en PDF, \`xlsx\` ou \`ods\` ; une présentation en PDF,
+  \`pptx\` ou \`odp\`.
+- **Refusés** : les macros, les liaisons à d'autres fichiers, les connexions de données et les
+  formules qui appellent une adresse (\`WEBSERVICE\`, \`DDE\`).
+
 ## Vérificateur
 
 À chaque nouvelle version, DocIbis vérifie le modèle avant toute donnée : balises
@@ -512,7 +530,7 @@ confiance » la clé publique de REC, affichée dans Configuration, Environnemen
 
 export const HELP_PAGES: HelpPage[] = [
   { slug: 'demarrer', title: 'Bien démarrer', summary: 'Rôles, essai d’un modèle, suivi de la production.', icon: BookOpen, colour: 'text-teal-500', content: () => start },
-  { slug: 'syntaxe', title: 'Écrire un modèle', summary: 'Champs, formats, conditions, répétitions, images, codes QR, liasses.', icon: PenLine, colour: 'text-amber-500', content: syntax },
+  { slug: 'syntaxe', title: 'Écrire un modèle', summary: 'Champs, formats, conditions, répétitions, images, codes QR, Excel et PowerPoint, liasses.', icon: PenLine, colour: 'text-amber-500', content: syntax },
   { slug: 'docmosis', title: 'Passer de Docmosis à DocIbis', summary: 'Bibliothèque de modèles, route /api/render, références, options.', icon: FileStack, colour: 'text-blue-600', content: docmosis },
   { slug: 'api', title: "Utiliser l'API", summary: 'Clé, appel de /v1/render, exemples en 7 langages, erreurs, rendu en arrière-plan.', icon: Code2, colour: 'text-violet-500', content: api },
   { slug: 'mcp', title: 'Serveur MCP', summary: 'Brancher Claude, VS Code ou Cursor sur DocIbis.', icon: Bot, colour: 'text-indigo-500', content: mcp },

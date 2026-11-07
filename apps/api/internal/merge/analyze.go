@@ -51,6 +51,7 @@ func Analyze(template []byte) (Analysis, error) {
 	}
 	unsupported := map[string]bool{}
 	refs := false
+	family := familyOf(zr)
 	for _, f := range zr.File {
 		if !parts[f.Name] {
 			continue
@@ -153,6 +154,10 @@ func Analyze(template []byte) (Analysis, error) {
 	}
 	sort.Strings(a.Unsupported)
 	switch {
+	case family == "spreadsheet":
+		a.Engine, a.Reason = "standard", "classeur : LibreOffice calcule les formules et les graphiques"
+	case family == "presentation":
+		a.Engine, a.Reason = "standard", "présentation : LibreOffice la met en page"
 	case len(a.Unsupported) > 0:
 		a.Engine, a.Reason = "standard", "syntaxe pas encore prise en charge : "+strings.Join(a.Unsupported, ", ")
 	case refs:

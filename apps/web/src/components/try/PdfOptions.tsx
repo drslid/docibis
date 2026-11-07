@@ -1,16 +1,29 @@
 import type { TryRenderForm, TryRenderFormPdfRestrictEditing, TryRenderFormPdfRestrictPrinting } from '@/api/generated/docibis'
 import { useI18n } from '@/i18n/useI18n'
 
-/** The formats of a document, with their content type for the browser. */
+/** The formats of a document, with their content type for the browser and the kind of template they come from (any when empty). */
 export const FORMATS = [
-  { value: 'pdf', label: 'PDF', mime: 'application/pdf' },
-  { value: 'docx', label: 'Word (.docx)', mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' },
-  { value: 'doc', label: 'Word 97 (.doc)', mime: 'application/msword' },
-  { value: 'odt', label: 'OpenDocument (.odt)', mime: 'application/vnd.oasis.opendocument.text' },
-  { value: 'rtf', label: 'RTF', mime: 'application/rtf' },
-  { value: 'html', label: 'HTML', mime: 'text/html' },
-  { value: 'txt', label: '', mime: 'text/plain' },
+  { value: 'pdf', label: 'PDF', mime: 'application/pdf', family: '' },
+  { value: 'docx', label: 'Word (.docx)', mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', family: 'text' },
+  { value: 'doc', label: 'Word 97 (.doc)', mime: 'application/msword', family: 'text' },
+  { value: 'odt', label: 'OpenDocument (.odt)', mime: 'application/vnd.oasis.opendocument.text', family: 'text' },
+  { value: 'rtf', label: 'RTF', mime: 'application/rtf', family: 'text' },
+  { value: 'html', label: 'HTML', mime: 'text/html', family: 'text' },
+  { value: 'txt', label: '', mime: 'text/plain', family: 'text' },
+  { value: 'xlsx', label: 'Excel (.xlsx)', mime: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', family: 'spreadsheet' },
+  { value: 'ods', label: 'OpenDocument (.ods)', mime: 'application/vnd.oasis.opendocument.spreadsheet', family: 'spreadsheet' },
+  { value: 'pptx', label: 'PowerPoint (.pptx)', mime: 'application/vnd.openxmlformats-officedocument.presentationml.presentation', family: 'presentation' },
+  { value: 'odp', label: 'OpenDocument (.odp)', mime: 'application/vnd.oasis.opendocument.presentation', family: 'presentation' },
 ] as const
+
+/** The template files a user picks. */
+export const TEMPLATE_FILES = '.docx,.odt,.xlsx,.ods,.pptx,.odp'
+
+/** The kind of a template, from its file name: text, spreadsheet or presentation. */
+export function familyOf(name = '') {
+  const ext = name.toLowerCase().split('.').pop()
+  return ext === 'xlsx' || ext === 'ods' ? 'spreadsheet' : ext === 'pptx' || ext === 'odp' ? 'presentation' : 'text'
+}
 
 export interface PdfSettings {
   password: string

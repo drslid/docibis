@@ -494,7 +494,7 @@ export interface TryAnalyzeForm {
 }
 
 /**
- * Format du document produit
+ * Format du document produit ; xlsx et ods pour un modèle Excel, pptx et odp pour un modèle PowerPoint
  */
 export type RenderFormFormat = typeof RenderFormFormat[keyof typeof RenderFormFormat];
 
@@ -507,6 +507,10 @@ export const RenderFormFormat = {
   rtf: 'rtf',
   html: 'html',
   txt: 'txt',
+  xlsx: 'xlsx',
+  ods: 'ods',
+  pptx: 'pptx',
+  odp: 'odp',
 } as const;
 
 /**
@@ -567,7 +571,7 @@ export interface RenderForm {
   templateName?: string;
   /** Données JSON du document (texte ou fichier) */
   data: string;
-  /** Format du document produit */
+  /** Format du document produit ; xlsx et ods pour un modèle Excel, pptx et odp pour un modèle PowerPoint */
   format?: RenderFormFormat;
   /** Nom du fichier rendu (Content-Disposition) */
   outputName?: string;
@@ -673,6 +677,10 @@ export const RenderJobFormat = {
   rtf: 'rtf',
   html: 'html',
   txt: 'txt',
+  xlsx: 'xlsx',
+  ods: 'ods',
+  pptx: 'pptx',
+  odp: 'odp',
 } as const;
 
 /**
@@ -734,6 +742,10 @@ export const RenderOptionsFormat = {
   rtf: 'rtf',
   html: 'html',
   txt: 'txt',
+  xlsx: 'xlsx',
+  ods: 'ods',
+  pptx: 'pptx',
+  odp: 'odp',
 } as const;
 
 export type RenderOptionsPdfa = typeof RenderOptionsPdfa[keyof typeof RenderOptionsPdfa];
@@ -845,7 +857,7 @@ export interface DocmosisRender {
   /** Clé API DocIbis (dib_…) ; sinon en-tête Authorization */
   accessKey?: string;
   templateName: string;
-  /** Nom du document ; son extension donne le format (pdf, docx, doc, odt, rtf, html, txt) */
+  /** Nom du document ; son extension donne le format (pdf, docx, doc, odt, rtf, html, txt, xlsx, ods, pptx, odp) */
   outputName: string;
   outputFormat?: string;
   /** Données du document, objet JSON ou texte JSON */
@@ -1090,7 +1102,7 @@ export interface TemplateDetail {
 
 export interface TemplateRename {
   /**
-     * Nouveau chemin, avec son extension (.docx, .odt, .pdf, .typ)
+     * Nouveau chemin, avec son extension (.docx, .odt, .xlsx, .ods, .pptx, .odp, .pdf, .typ)
      * @maxLength 300
      */
   path: string;
@@ -1520,7 +1532,7 @@ export interface ApiKeyCreated {
 }
 
 /**
- * Format du document produit ; les options PDF ne valent que pour le PDF
+ * Format du document produit ; les options PDF ne valent que pour le PDF ; xlsx et ods pour un modèle Excel, pptx et odp pour un modèle PowerPoint
  */
 export type TryRenderFormFormat = typeof TryRenderFormFormat[keyof typeof TryRenderFormFormat];
 
@@ -1533,6 +1545,10 @@ export const TryRenderFormFormat = {
   rtf: 'rtf',
   html: 'html',
   txt: 'txt',
+  xlsx: 'xlsx',
+  ods: 'ods',
+  pptx: 'pptx',
+  odp: 'odp',
 } as const;
 
 export type TryRenderFormPdfa = typeof TryRenderFormPdfa[keyof typeof TryRenderFormPdfa];
@@ -1572,7 +1588,7 @@ export interface TryRenderForm {
   templateName?: string;
   /** Données JSON du document */
   data: string;
-  /** Format du document produit ; les options PDF ne valent que pour le PDF */
+  /** Format du document produit ; les options PDF ne valent que pour le PDF ; xlsx et ods pour un modèle Excel, pptx et odp pour un modèle PowerPoint */
   format?: TryRenderFormFormat;
   pdfa?: TryRenderFormPdfa;
   accessible?: boolean;
@@ -2294,6 +2310,10 @@ export const ListRendersFormat = {
   rtf: 'rtf',
   html: 'html',
   txt: 'txt',
+  xlsx: 'xlsx',
+  ods: 'ods',
+  pptx: 'pptx',
+  odp: 'odp',
 } as const;
 
 export type ListAuditParams = {

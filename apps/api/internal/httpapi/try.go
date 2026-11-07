@@ -184,7 +184,7 @@ func (s *Server) readForm(body *multipart.Reader) (tryForm, error) {
 		}
 	}
 	if len(f.template) == 0 && f.templateName == "" {
-		return f, refuse("Choisissez un modèle Word (.docx) ou le nom d'un modèle de la bibliothèque (templateName).")
+		return f, refuse("Choisissez un modèle Word, Excel ou PowerPoint (.docx, .xlsx, .pptx) ou le nom d'un modèle de la bibliothèque (templateName).")
 	}
 	return f, nil
 }
@@ -219,16 +219,38 @@ const maxUnpacked = 256 << 20
 
 var externalRelation = regexp.MustCompile(`<Relationship\b[^>]*\bTargetMode="External"[^>]*>`)
 
-// checkTemplate accepts a Word document or an OpenDocument text without
-// macros, without links to outside files (LibreOffice would fetch them) and
-// of reasonable size once unpacked. It returns "docx" or "odt".
+// templateExts are the files of the library: templates, fixed PDF files and
+// Typst templates.
+var templateExts = []string{".docx", ".odt", ".xlsx", ".ods", ".pptx", ".odp", ".pdf", ".typ"}
+
+// officeKinds are the Office templates, by their main part; odfKinds the
+// OpenDocument ones, by the end of their type.
+var (
+	officeKinds = map[string]string{"word/document.xml": "docx", "xl/workbook.xml": "xlsx", "ppt/presentation.xml": "pptx"}
+	odfKinds    = map[string]string{"text": "odt", "spreadsheet": "ods", "presentation": "odp"}
+)
+
+// callsOut finds the formulas that read an address or another application:
+// LibreOffice would run them when it computes the sheet.
+var callsOut = regexp.MustCompile(`(?i)\bWEBSERVICE\s*\(|\bDDE\s*\(`)
+
+// checkTemplate accepts a Word, Excel or PowerPoint file, or an OpenDocument
+// one, without macros, without links to outside files or addresses
+// (LibreOffice would fetch them) and of reasonable size once unpacked. It
+// returns its kind: docx, xlsx, pptx, odt, ods or odp.
 func checkTemplate(name string, raw []byte) (string, error) {
+	return checkPackage(name, raw, 0)
+}
+
+// checkPackage checks a template, or a file embedded in one at depth > 0.
+func checkPackage(name string, raw []byte, depth int) (string, error) {
 	if strings.HasPrefix(name, "~$") {
-		return "", refuse("Ce fichier est un fichier temporaire de Word (~$) : choisissez le vrai modèle.")
+		return "", refuse("Ce fichier est un fichier temporaire d'Office (~$) : choisissez le vrai modèle.")
 	}
+	notTemplate := refuse("Ce fichier n'est pas un modèle Word, Excel ou PowerPoint (.docx, .xlsx, .pptx) ni OpenDocument (.odt, .ods, .odp).")
 	zr, err := zip.NewReader(bytes.NewReader(raw), int64(len(raw)))
 	if err != nil {
-		return "", refuse("Ce fichier n'est pas un document Word (.docx) ni OpenDocument (.odt).")
+		return "", notTemplate
 	}
 	var total uint64
 	kind := ""
@@ -236,24 +258,31 @@ func checkTemplate(name string, raw []byte) (string, error) {
 		total += f.UncompressedSize64
 		name := strings.ToLower(f.Name)
 		switch {
-		case name == "word/document.xml":
-			kind = "docx"
+		case officeKinds[name] != "":
+			kind = officeKinds[name]
 		case name == "mimetype":
-			if m, err := readZip(f, 100); err == nil && strings.HasPrefix(string(m), "application/vnd.oasis.opendocument.text") {
-				kind = "odt"
+			if m, err := readZip(f, 100); err == nil {
+				for family, k := range odfKinds {
+					if strings.HasPrefix(string(m), "application/vnd.oasis.opendocument."+family) {
+						kind = k
+					}
+				}
 			}
 		case strings.HasSuffix(name, "vbaproject.bin") || strings.HasPrefix(name, "basic/") || strings.HasPrefix(name, "scripts/"):
 			return "", refuse("Le modèle contient des macros : il est refusé.")
+		case strings.HasPrefix(name, "xl/externallinks/") || name == "xl/connections.xml":
+			return "", refuse("Le classeur lit des données extérieures (liaison à un autre fichier ou connexion) : il est refusé.")
 		}
 	}
 	if total > maxUnpacked {
 		return "", &tryError{http.StatusRequestEntityTooLarge, "Le modèle dépasse 256 Mo une fois décompressé."}
 	}
 	if kind == "" {
-		return "", refuse("Ce fichier n'est pas un document Word (.docx) ni OpenDocument (.odt).")
+		return "", notTemplate
 	}
+	office := kind == "docx" || kind == "xlsx" || kind == "pptx"
 	for _, f := range zr.File {
-		if kind != "docx" || !strings.HasSuffix(f.Name, ".rels") {
+		if !office || !strings.HasSuffix(f.Name, ".rels") {
 			continue
 		}
 		rels, err := readZip(f, 10<<20)
@@ -269,17 +298,40 @@ func checkTemplate(name string, raw []byte) (string, error) {
 	}
 	for _, f := range zr.File {
 		name := strings.ToLower(f.Name)
+		// LibreOffice opens the objects of a sheet or a slide to draw them (the
+		// data of a chart): each one is checked as a template in turn.
+		if (kind == "xlsx" || kind == "pptx") && (strings.Contains(name, "/embeddings/") || strings.Contains(name, "/activex/")) {
+			inner, err := readZip(f, maxUnpacked)
+			if err != nil {
+				return "", refuse("Le modèle est abîmé (%s).", f.Name)
+			}
+			if depth >= 2 || !bytes.HasPrefix(inner, []byte("PK")) {
+				return "", refuse("Le modèle contient un objet que DocIbis ne sait pas vérifier (%s) : il est refusé.", path.Base(f.Name))
+			}
+			if _, err := checkPackage(f.Name, inner, depth+1); err != nil {
+				return "", err
+			}
+			continue
+		}
 		docxPart := kind == "docx" && strings.HasPrefix(name, "word/") && strings.HasSuffix(name, ".xml")
-		odtPart := kind == "odt" && (name == "content.xml" || name == "styles.xml")
-		if !docxPart && !odtPart {
+		// Formulas and links sit in the sheets, the defined names and the embedded objects too.
+		odfPart := !office && strings.HasSuffix(name, ".xml")
+		formulas := kind == "xlsx" && strings.HasPrefix(name, "xl/") && strings.HasSuffix(name, ".xml") || odfPart
+		if !docxPart && !formulas {
 			continue
 		}
 		part, err := readZip(f, maxUnpacked)
 		if err != nil {
 			return "", refuse("Le modèle est abîmé (%s).", f.Name)
 		}
-		if docxPart && readsOutside(part) || odtPart && linksOutside(part) {
+		if docxPart && readsOutside(part) || odfPart && linksOutside(part) {
 			return "", refuse("Le modèle lit un fichier ou une adresse extérieure (image ou texte lié, champ INCLUDEPICTURE, INCLUDETEXT, LINK ou DDE) : il est refusé.")
+		}
+		if formulas && callsOut.Match(part) {
+			return "", refuse("Le modèle a une formule qui appelle une adresse ou une autre application (WEBSERVICE, DDE) : il est refusé.")
+		}
+		if (kind == "ods" || kind == "odp") && bytes.Contains(part, []byte("<draw:object-ole")) {
+			return "", refuse("Le modèle contient un objet que DocIbis ne sait pas vérifier (objet OLE) : il est refusé.")
 		}
 	}
 	return kind, nil
@@ -387,9 +439,14 @@ func (c *preparedCache) put(key string, odt []byte) {
 	c.items[key] = &preparedODT{odt: odt, used: time.Now()}
 }
 
-// prepare returns the template as an ODT, converting a Word file once.
+// preparedAs is how LibreOffice prepares an Office template: the name of the
+// copy it reads, and the OpenDocument format it writes.
+var preparedAs = map[string][2]string{"docx": {"template.docx", "odt"}, "xlsx": {"template.xlsx", "ods"}, "pptx": {"template.pptx", "odp"}}
+
+// prepare returns the template as OpenDocument, converting an Office file once.
 func (s *Server) prepare(ctx context.Context, r Renderer, f tryForm, kind, dir string) ([]byte, time.Duration, error) {
-	if kind == "odt" {
+	as, office := preparedAs[kind]
+	if !office {
 		return f.template, 0, nil
 	}
 	if len(f.prepared) > 0 {
@@ -400,12 +457,12 @@ func (s *Server) prepare(ctx context.Context, r Renderer, f tryForm, kind, dir s
 	if odt, ok := s.prepared.get(key); ok {
 		return odt, 0, nil
 	}
-	in, out := filepath.Join(dir, "template.docx"), filepath.Join(dir, "template.odt")
+	in, out := filepath.Join(dir, as[0]), filepath.Join(dir, "template."+as[1])
 	if err := os.WriteFile(in, f.template, 0o600); err != nil {
 		return nil, 0, err
 	}
 	start := time.Now()
-	if _, err := r.Convert(ctx, in, out, "odt", ""); err != nil {
+	if _, err := r.Convert(ctx, in, out, as[1], ""); err != nil {
 		return nil, 0, err
 	}
 	odt, err := os.ReadFile(out)
@@ -650,6 +707,10 @@ func (s *Server) produceDocument(ctx context.Context, f tryForm, format string) 
 	if doc.format, err = outputFormat(doc.format); err != nil {
 		return doc, err
 	}
+	family := merge.Family(odt)
+	if err := formatFor(doc.format, family); err != nil {
+		return doc, err
+	}
 	if err := f.opts.resolve(); err != nil {
 		return doc, err
 	}
@@ -677,7 +738,11 @@ func (s *Server) produceDocument(ctx context.Context, f tryForm, format string) 
 	}
 	doc.prepare, doc.merge = prep, time.Since(t)
 	s.logger.Debug("document: merged", "request_id", requestID(ctx), "template", doc.name, "merged_bytes", len(merged), "merge_ms", ms(doc.merge))
-	in, out := filepath.Join(dir, "merged.odt"), filepath.Join(dir, "document."+doc.format)
+	ext := odfKinds[family]
+	if ext == "" {
+		ext = "odt"
+	}
+	in, out := filepath.Join(dir, "merged."+ext), filepath.Join(dir, "document."+doc.format)
 	if err := os.WriteFile(in, merged, 0o600); err != nil {
 		return doc, err
 	}

@@ -37,6 +37,8 @@ ARG LO_SHA256_AMD64=30903df3b9f61360d9660cd707de48cd2831469114492a5008ed58a0ac77
 ARG LO_SHA256_ARM64=1b069c20dd237f6decad3ea02cb02f39fdf458b03d09c2a9facb7b9b71e6a27a
 ARG LO_PACKAGES="libreoffice26.8-ure libobasis26.8-core libreoffice26.8 \
   libobasis26.8-writer libreoffice26.8-writer libobasis26.8-graphicfilter \
+  libobasis26.8-calc libreoffice26.8-calc libobasis26.8-impress libreoffice26.8-impress \
+  libobasis26.8-draw libreoffice26.8-draw \
   libobasis26.8-pyuno libobasis26.8-ooolinguistic libreoffice26.8-dict-fr \
   libobasis26.8-en-us libreoffice26.8-en-us"
 RUN case "${TARGETARCH}" in \

@@ -3,7 +3,7 @@ title: Write a template
 description: The tags of a DocIbis template, compatible with Docmosis.
 ---
 
-A template is an ordinary Word document (`.docx`). Where the data goes, you type a tag between `<<` and `>>`. DocIbis reads the same tags as Docmosis, so existing Docmosis templates work as they are.
+A template is an ordinary Word document (`.docx`), or an Excel workbook or PowerPoint presentation (see below). Where the data goes, you type a tag between `<<` and `>>`. DocIbis reads the same tags as Docmosis, so existing Docmosis templates work as they are.
 
 ## The data
 
@@ -38,6 +38,16 @@ Your application sends JSON, for example:
 | an image with the bookmark `imgfit_logo`               | the image of the field `logo`, fitted        |
 
 The console lists every tag in **Help → Writing a template** and in the **Tag cheat sheet** of the Try page.
+
+## Excel and PowerPoint templates
+
+A workbook (`.xlsx`, `.ods`) or a presentation (`.pptx`, `.odp`) takes the same tags, typed in cells, text boxes and slide titles. LibreOffice always produces these documents.
+
+- **Repeated rows**: `<<rr_lines>>` in the first cell of a sheet or table row and `<<er_>>` in the last one repeat the row for each item.
+- **Numbers and dates**: a cell holding a single field (`<<price>>`) gets a real number, or a real date for a value like `2026-11-06`, so formulas can compute with it.
+- **Formulas and charts** of a workbook: a formula of the repeated row (`=B5*C5`) is copied to each row; a sum or a chart that covers the row covers all the rows produced. LibreOffice computes everything again before writing the document.
+- **Formats**: a workbook gives PDF, `xlsx` or `ods`; a presentation PDF, `pptx` or `odp`.
+- **Refused**: macros, links to other files, data connections, OLE objects and formulas that call an address (`WEBSERVICE`, `DDE`), embedded objects included.
 
 ## What you get
 

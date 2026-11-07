@@ -28,7 +28,7 @@ function stubApi() {
   return fetch
 }
 
-async function openTemplate() {
+async function openTemplate(name = 'mandat.docx') {
   render(
     <QueryClientProvider client={new QueryClient()}>
       <MemoryRouter>
@@ -36,7 +36,7 @@ async function openTemplate() {
       </MemoryRouter>
     </QueryClientProvider>,
   )
-  fireEvent.change(screen.getByLabelText('Modèle Word'), { target: { files: [new File(['PK'], 'mandat.docx')] } })
+  fireEvent.change(screen.getByLabelText('Modèle Word, Excel ou PowerPoint'), { target: { files: [new File(['PK'], name)] } })
   expect(await screen.findByText('Calque possible')).toBeInTheDocument()
 }
 
@@ -118,5 +118,15 @@ describe('TryPage', () => {
     expect(screen.getByText("Pas d'aperçu pour ce format : téléchargez le document.")).toBeInTheDocument()
     const odtForm = fetch.mock.calls.filter(([url]) => url === '/api/try/render').at(-1)?.[1]?.body as FormData
     expect([odtForm.get('format'), odtForm.get('passwordProtect')]).toEqual(['odt', null])
+  })
+
+  it('offers the formats of the kind of template, and PDF again when the kind changes', async () => {
+    stubApi()
+    await openTemplate()
+    fireEvent.change(screen.getByLabelText('Format du document'), { target: { value: 'odt' } })
+    fireEvent.change(screen.getByLabelText('Modèle Word, Excel ou PowerPoint'), { target: { files: [new File(['PK'], 'facture.xlsx')] } })
+    const select = screen.getByLabelText('Format du document') as HTMLSelectElement
+    expect([...select.options].map((o) => o.value)).toEqual(['pdf', 'xlsx', 'ods'])
+    expect(select.value).toBe('pdf')
   })
 })

@@ -7,15 +7,39 @@ import (
 )
 
 // formats lists, in order, the formats LibreOffice produces a document in,
-// with their content type. The PDF options only apply to PDF.
-var formats = []struct{ name, contentType string }{
-	{"pdf", "application/pdf"},
-	{"docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"},
-	{"doc", "application/msword"},
-	{"odt", "application/vnd.oasis.opendocument.text"},
-	{"rtf", "application/rtf"},
-	{"html", "text/html; charset=utf-8"},
-	{"txt", "text/plain; charset=utf-8"},
+// with their content type and the kind of template they come from (any when
+// empty). The PDF options only apply to PDF.
+var formats = []struct{ name, contentType, family string }{
+	{"pdf", "application/pdf", ""},
+	{"docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "text"},
+	{"doc", "application/msword", "text"},
+	{"odt", "application/vnd.oasis.opendocument.text", "text"},
+	{"rtf", "application/rtf", "text"},
+	{"html", "text/html; charset=utf-8", "text"},
+	{"txt", "text/plain; charset=utf-8", "text"},
+	{"xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "spreadsheet"},
+	{"ods", "application/vnd.oasis.opendocument.spreadsheet", "spreadsheet"},
+	{"pptx", "application/vnd.openxmlformats-officedocument.presentationml.presentation", "presentation"},
+	{"odp", "application/vnd.oasis.opendocument.presentation", "presentation"},
+}
+
+// formatFor tells whether a template of a family (text, spreadsheet,
+// presentation) gives a document in format.
+func formatFor(format, family string) error {
+	var names []string
+	for _, f := range formats {
+		if f.family == "" || f.family == family {
+			if f.name == format {
+				return nil
+			}
+			names = append(names, f.name)
+		}
+	}
+	what := map[string]string{"text": "Un modèle Word", "spreadsheet": "Un modèle Excel", "presentation": "Un modèle PowerPoint"}[family]
+	if what == "" {
+		return nil
+	}
+	return refuse("%s ne se produit pas en %s : formats possibles %s.", what, format, strings.Join(names, ", "))
 }
 
 // formatAliases are other names applications give a format.

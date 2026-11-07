@@ -23,6 +23,7 @@ import { NamesPanel } from '@/components/library/NamesPanel'
 import { NativePanel } from '@/components/library/NativePanel'
 import { PromotePanel } from '@/components/library/PromotePanel'
 import { TemplateStats } from '@/components/library/TemplateStats'
+import { TEMPLATE_FILES } from '@/components/try/PdfOptions'
 import { atLeast, useMe } from '@/hooks/useMe'
 import { useI18n, type Key } from '@/i18n/useI18n'
 
@@ -94,7 +95,7 @@ function AddTemplate({ onDone }: { onDone: () => void }) {
     <form onSubmit={submit} className="card mb-6 grid gap-4 md:grid-cols-2">
       <div>
         <label className="label" htmlFor="lib-file">{t('lib.file')}</label>
-        <input id="lib-file" type="file" accept=".docx,.odt,.pdf" className="input" onChange={(e) => { const f = e.target.files?.[0]; setFile(f); if (f && !path) setPath(f.name) }} />
+        <input id="lib-file" type="file" accept={`${TEMPLATE_FILES},.pdf`} className="input" onChange={(e) => { const f = e.target.files?.[0]; setFile(f); if (f && !path) setPath(f.name) }} />
       </div>
       <div>
         <label className="label" htmlFor="lib-path">{t('lib.path')} <HelpTip>{t('tip.path')}</HelpTip></label>
@@ -385,7 +386,7 @@ function NewVersion({ id, onDone }: { id: number; onDone: (d: TemplateDetail) =>
     >
       <div>
         <label className="label" htmlFor="version-file">{t('lib.file')}</label>
-        <input id="version-file" type="file" accept=".docx,.odt,.pdf" className="input" onChange={(e) => setFile(e.target.files?.[0])} />
+        <input id="version-file" type="file" accept={`${TEMPLATE_FILES},.pdf`} className="input" onChange={(e) => setFile(e.target.files?.[0])} />
       </div>
       <div>
         <label className="label" htmlFor="version-note">{t('lib.note')}</label>
