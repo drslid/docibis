@@ -34,6 +34,11 @@ export function wordManifest(origin: string, name: string, id: string): string {
   <Hosts>
     <Host Name="Document"/>
   </Hosts>
+  <Requirements>
+    <Sets DefaultMinVersion="1.1">
+      <Set Name="WordApi" MinVersion="1.1"/>
+    </Sets>
+  </Requirements>
   <DefaultSettings>
     <SourceLocation DefaultValue="${url('/word/')}"/>
   </DefaultSettings>
