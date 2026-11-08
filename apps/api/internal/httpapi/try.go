@@ -596,14 +596,7 @@ func (s *Server) analyzeForm(ctx context.Context, f tryForm) (TryTemplate, error
 }
 
 func (s *Server) TryAnalyze(ctx context.Context, req TryAnalyzeRequestObject) (TryAnalyzeResponseObject, error) {
-	var out TryTemplate
-	err := error(notReady)
-	if s.renderer.Load() != nil {
-		var f tryForm
-		if f, err = s.readForm(req.Body); err == nil {
-			out, err = s.analyzeForm(ctx, f)
-		}
-	}
+	out, err := s.analyzeBody(ctx, req.Body)
 	if err == nil {
 		return TryAnalyze200JSONResponse(out), nil
 	}
@@ -615,6 +608,34 @@ func (s *Server) TryAnalyze(ctx context.Context, req TryAnalyzeRequestObject) (T
 	default:
 		return TryAnalyze400ApplicationProblemPlusJSONResponse{BadRequestApplicationProblemPlusJSONResponse(p)}, nil
 	}
+}
+
+// AnalyzeTemplate is TryAnalyze with an API key or a personal token: the
+// Word add-in checks the document being written.
+func (s *Server) AnalyzeTemplate(ctx context.Context, req AnalyzeTemplateRequestObject) (AnalyzeTemplateResponseObject, error) {
+	out, err := s.analyzeBody(ctx, req.Body)
+	if err == nil {
+		return AnalyzeTemplate200JSONResponse(out), nil
+	}
+	switch status, p := s.failure(err); status {
+	case http.StatusRequestEntityTooLarge:
+		return AnalyzeTemplate413ApplicationProblemPlusJSONResponse{TooLargeApplicationProblemPlusJSONResponse(p)}, nil
+	case http.StatusServiceUnavailable:
+		return AnalyzeTemplate503ApplicationProblemPlusJSONResponse{busy(p)}, nil
+	default:
+		return AnalyzeTemplate400ApplicationProblemPlusJSONResponse{BadRequestApplicationProblemPlusJSONResponse(p)}, nil
+	}
+}
+
+func (s *Server) analyzeBody(ctx context.Context, body *multipart.Reader) (TryTemplate, error) {
+	if s.renderer.Load() == nil {
+		return TryTemplate{}, notReady
+	}
+	f, err := s.readForm(body)
+	if err != nil {
+		return TryTemplate{}, err
+	}
+	return s.analyzeForm(ctx, f)
 }
 
 func (s *Server) TryRender(ctx context.Context, req TryRenderRequestObject) (TryRenderResponseObject, error) {

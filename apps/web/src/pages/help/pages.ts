@@ -145,6 +145,20 @@ Un administrateur crée les comptes dans **Utilisateurs** avec un mot de passe p
 2. DocIbis lit ses balises et propose des données d'exemple : ajustez-les.
 3. « Produire le PDF » affiche le document et son temps de production.
 
+## Le complément Word
+
+Un volet DocIbis dans Word aide à écrire un modèle sans quitter le document :
+
+- **Balises** : insère un champ, ou une balise de l'aide-mémoire, à la place de la sélection.
+- **Vérifier** : lit le document en cours comme la bibliothèque le fait (balises, sections,
+  polices…) ; « Trouver » sélectionne dans le document la balise en cause.
+- **Aperçu** : produit le PDF avec des données d'exemple, que l'on modifie.
+
+Pour l'installer : page [Intégrations](/integrations#word), « Télécharger le manifeste », puis
+dans Word, Insertion › Compléments › Mes compléments › Charger mon complément. Le volet se
+connecte avec un jeton personnel (Mon profil › Jetons personnels). L'administrateur
+Microsoft 365 peut aussi déployer le manifeste pour tous.
+
 ## Suivre la production
 
 - **Documents produits** liste chaque document, de la console, de l'API ou du serveur MCP : date, modèle, auteur ou clé, durée, résultat. Ni le document ni ses données ne sont gardés.
@@ -551,7 +565,7 @@ confiance » la clé publique de REC, affichée dans Configuration, Environnemen
 }
 
 export const HELP_PAGES: HelpPage[] = [
-  { slug: 'demarrer', title: 'Bien démarrer', summary: 'Rôles, essai d’un modèle, suivi de la production.', icon: BookOpen, colour: 'text-teal-500', content: () => start },
+  { slug: 'demarrer', title: 'Bien démarrer', summary: 'Rôles, essai d’un modèle, complément Word, suivi de la production.', icon: BookOpen, colour: 'text-teal-500', content: () => start },
   { slug: 'syntaxe', title: 'Écrire un modèle', summary: 'Champs, formats, conditions, répétitions, images, codes QR, Excel et PowerPoint, graphiques, liasses.', icon: PenLine, colour: 'text-amber-500', content: syntax },
   { slug: 'docmosis', title: 'Passer de Docmosis à DocIbis', summary: 'Bibliothèque de modèles, route /api/render, références, options.', icon: FileStack, colour: 'text-blue-600', content: docmosis },
   { slug: 'api', title: "Utiliser l'API", summary: 'Clé, appel de /v1/render, exemples en 7 langages, erreurs, rendu en arrière-plan.', icon: Code2, colour: 'text-violet-500', content: api },

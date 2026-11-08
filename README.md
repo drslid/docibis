@@ -106,6 +106,7 @@ curl -H "Authorization: Bearer $DOCIBIS_API_KEY" \
 - PDF forms (CERFA and others): a PDF with form fields is filled with the data, then its fields are locked.
 - An n8n node (`integrations/n8n-nodes-docibis`): render now or in the background, follow a job, list the templates.
 - An MCP server at `/v1/mcp` so that AI assistants can list templates and produce documents.
+- A Word add-in: a DocIbis pane inserts tags, checks the template being written and shows its PDF with data, signed in with a personal token; the console downloads the manifest of the instance.
 - Administrator, editor and viewer roles, second factor (TOTP), API keys with scopes and expiry, audit log.
 - History of produced documents, statistics per template, alert rules by e-mail or Teams, Prometheus metrics.
 - Promotion of a template version from one DocIbis instance to another, for example from test to production.

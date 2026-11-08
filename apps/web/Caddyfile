@@ -11,12 +11,19 @@
 
 	header {
 		X-Content-Type-Options nosniff
-		X-Frame-Options DENY
 		Referrer-Policy strict-origin-when-cross-origin
 		Permissions-Policy "camera=(), microphone=(), geolocation=()"
 		Strict-Transport-Security "max-age=31536000"
-		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; frame-src 'self' blob:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src blob:"
 		-Server
+	}
+	# The pane of the Word add-in loads Office.js from Microsoft and opens
+	# inside Word, also Word on the web (an Office frame).
+	@word path /word /word/*
+	header @word Content-Security-Policy "default-src 'self'; script-src 'self' https://appsforoffice.microsoft.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; frame-src 'self' blob:; frame-ancestors 'self' https://*.officeapps.live.com https://*.office.com https://*.office365.com https://*.sharepoint.com https://*.microsoft365.com https://*.cloud.microsoft; base-uri 'self'; form-action 'self'; object-src blob:"
+	@console not path /word /word/*
+	header @console {
+		X-Frame-Options DENY
+		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; frame-src 'self' blob:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src blob:"
 	}
 
 	@api path /api/* /v1/* /mcp /mcp/* /metrics
@@ -32,7 +39,8 @@
 		header @assets Cache-Control "public, max-age=31536000, immutable"
 		@pages not path /assets/*
 		header @pages Cache-Control "no-cache"
-		try_files {path} /index.html
+		redir /word /word/ 308
+		try_files {path} {path}index.html /index.html
 		file_server
 	}
 }

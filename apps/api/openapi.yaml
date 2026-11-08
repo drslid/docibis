@@ -380,6 +380,37 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "413":
           $ref: "#/components/responses/TooLarge"
+  /v1/templates/analyze:
+    post:
+      operationId: analyzeTemplate
+      tags: [documents]
+      summary: Lit un modèle sans l'enregistrer (balises, vérifications, moteur) et propose des données d'exemple
+      description: |
+        Pour le complément Word et les outils qui écrivent des modèles : le
+        fichier n'est pas gardé. Clé API ou jeton personnel (page Profil).
+      security:
+        - apiKey: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: "#/components/schemas/TryAnalyzeForm"
+      responses:
+        "200":
+          description: Modèle lu
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TryTemplate"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "413":
+          $ref: "#/components/responses/TooLarge"
+        "503":
+          $ref: "#/components/responses/Busy"
   /v1/templates:
     get:
       operationId: listPublishedTemplates
@@ -3299,7 +3330,7 @@ components:
       required: [template]
       properties:
         template:
-          description: Modèle Word (.docx) ou OpenDocument (.odt)
+          description: Modèle Word, Excel ou PowerPoint (.docx, .xlsx, .pptx) ou OpenDocument
           type: string
           format: binary
     RenderForm:
@@ -3307,7 +3338,7 @@ components:
       required: [data]
       properties:
         template:
-          description: Modèle Word (.docx) ou OpenDocument (.odt), avec ses balises Docmosis ; ou bien templateName
+          description: Modèle Word, Excel ou PowerPoint (.docx, .xlsx, .pptx) ou OpenDocument, avec ses balises Docmosis ; ou bien templateName
           type: string
           format: binary
         templateName:

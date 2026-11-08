@@ -78,3 +78,13 @@ The example invoice and its data give this PDF, with the rows repeated and the t
 - **Names.** Rename a template and its old path stays a former name: applications that still call it keep working until an administrator removes it. Merging two templates adds the other's missing versions, in their order, and keeps its names.
 - **Reference documents.** Attach the PDFs a template must reproduce (for example the ones Docmosis made): DocIbis compares each new version with them, page by page.
 - **Data check.** Per template, choose what happens when the data lacks a field: refuse the call (`strict`), report it in the `X-Missing-Fields` header (`warn`), or ignore it (`off`).
+
+## In Word: the add-in
+
+A DocIbis pane in Word helps write a template without leaving the document:
+
+- **Tags**: inserts a field, or a tag of the cheat sheet, in place of the selection.
+- **Check**: reads the document being written as the library does (tags, sections, fonts…); **Find** selects the tag at fault in the document.
+- **Preview**: produces the PDF with sample data you can edit.
+
+To install it, open **Integrations** in the console, download the manifest of your instance, then in Word choose Insert › Add-ins › My Add-ins › Upload My Add-in (a Microsoft 365 administrator can also deploy it for everyone). The pane signs in with a personal token (**Profile › Personal tokens**) and calls `POST /v1/templates/analyze` and `POST /v1/render`. It is served at `/word/`; Caddy lets Office frame that path only (`frame-ancestors`) and lets it load Office.js from Microsoft.

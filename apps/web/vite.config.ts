@@ -16,7 +16,11 @@ export default defineConfig({
   },
   server: { proxy },
   preview: { proxy },
-  build: { sourcemap: false },
+  // The console, and the pane of the Word add-in (/word/).
+  build: {
+    sourcemap: false,
+    rolldownOptions: { input: { main: fileURLToPath(new URL('./index.html', import.meta.url)), word: fileURLToPath(new URL('./word/index.html', import.meta.url)) } },
+  },
   test: {
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],

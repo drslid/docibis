@@ -1,13 +1,14 @@
 import { useState } from 'react'
 import { Link } from 'react-router'
 import { keepPreviousData } from '@tanstack/react-query'
-import { Activity, Bot, BookOpen, CheckCircle2, Code2, Download, KeyRound, LifeBuoy, Plug, ScrollText, XCircle, type LucideIcon } from 'lucide-react'
-import { useGetMcpInfo, useListMcpCalls } from '@/api/generated/docibis'
+import { Activity, Bot, BookOpen, CheckCircle2, Code2, Download, FileText, KeyRound, LifeBuoy, Plug, ScrollText, XCircle, type LucideIcon } from 'lucide-react'
+import { useGetInfo, useGetMcpInfo, useListMcpCalls } from '@/api/generated/docibis'
 import { CopyButton } from '@/components/common/CopyButton'
 import { Pager } from '@/components/common/ListTools'
 import { PageTitle } from '@/components/layout/PageTitle'
 import { atLeast, useMe } from '@/hooks/useMe'
 import { useI18n } from '@/i18n/useI18n'
+import { addinId, wordManifest } from '@/word/manifest'
 
 interface McpInfo {
   available: boolean
@@ -135,6 +136,44 @@ function McpCalls() {
   )
 }
 
+/** The Word add-in: the manifest of this instance, and how to install it. */
+function WordAddin({ origin }: { origin: string }) {
+  const { t } = useI18n()
+  const { data: info } = useGetInfo({ query: { staleTime: 300_000 } })
+  const name = info?.instance ? `DocIbis ${info.instance}` : 'DocIbis'
+
+  async function download() {
+    const xml = wordManifest(origin, name, await addinId(origin))
+    const link = document.createElement('a')
+    link.href = URL.createObjectURL(new Blob([xml], { type: 'application/xml' }))
+    link.download = `${name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-word.xml`
+    link.click()
+    URL.revokeObjectURL(link.href)
+  }
+
+  return (
+    <section id="word" className="card mb-6 scroll-mt-6">
+      <h2 className="flex items-center gap-2 text-lg font-semibold mb-2">
+        <FileText className="w-5 h-5 text-blue-600" /> {t('integrations.wordTitle')}
+      </h2>
+      <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">{t('integrations.wordIntro')}</p>
+      <ol className="list-decimal pl-5 space-y-2 text-sm text-gray-600 dark:text-gray-300">
+        <li>
+          {t('integrations.wordStep1')}
+          <button type="button" className="btn-primary inline-flex items-center gap-2 text-sm py-1.5 ml-2" onClick={() => void download()}>
+            <Download className="w-4 h-4" /> {t('integrations.wordManifest')}
+          </button>
+        </li>
+        <li>{t('integrations.wordStep2')}</li>
+        <li>
+          {t('integrations.wordStep3')}{' '}
+          <Link to="/profil?section=tokens" className="text-brand-700 dark:text-brand-400 underline">{t('tokens.manage')}</Link>
+        </li>
+      </ol>
+    </section>
+  )
+}
+
 /** Connecting applications and AI assistants. */
 export function IntegrationsPage() {
   const { t } = useI18n()
@@ -145,6 +184,7 @@ export function IntegrationsPage() {
 
   const links: [string, LucideIcon, string, string][] = [
     ['#mcp', Bot, t('integrations.mcpTitle'), 'text-indigo-500'],
+    ['#word', FileText, t('integrations.wordTitle'), 'text-blue-600'],
     ['#calls', Activity, t('calls.title'), 'text-emerald-500'],
     ['/profil?section=tokens', Plug, t('tokens.title'), 'text-indigo-500'],
     ['#api', Code2, t('integrations.apiTitle'), 'text-violet-500'],
@@ -211,6 +251,8 @@ export function IntegrationsPage() {
       </section>
 
       <McpCalls />
+
+      <WordAddin origin={origin} />
 
       <section id="api" className="card scroll-mt-6">
         <h2 className="flex items-center gap-2 text-lg font-semibold mb-2">

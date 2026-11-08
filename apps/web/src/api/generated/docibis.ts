@@ -489,7 +489,7 @@ export interface SettingsUpdate {
 }
 
 export interface TryAnalyzeForm {
-  /** Modèle Word (.docx) ou OpenDocument (.odt) */
+  /** Modèle Word, Excel ou PowerPoint (.docx, .xlsx, .pptx) ou OpenDocument */
   template: Blob | File;
 }
 
@@ -565,7 +565,7 @@ export const RenderFormPdfRestrictEditing = {
 } as const;
 
 export interface RenderForm {
-  /** Modèle Word (.docx) ou OpenDocument (.odt), avec ses balises Docmosis ; ou bien templateName */
+  /** Modèle Word, Excel ou PowerPoint (.docx, .xlsx, .pptx) ou OpenDocument, avec ses balises Docmosis ; ou bien templateName */
   template?: Blob | File;
   /** Chemin d'un modèle de la bibliothèque (version publiée) */
   templateName?: string;
@@ -3222,6 +3222,84 @@ export const useReceiveTemplates = <TError = ErrorType<BadRequestResponse | Unau
         TContext
       > => {
       return useMutation(getReceiveTemplatesMutationOptions(options), queryClient);
+    }
+
+export const getAnalyzeTemplateUrl = () => {
+
+
+
+
+  return `/v1/templates/analyze`
+}
+
+/**
+ * Pour le complément Word et les outils qui écrivent des modèles : le
+ * fichier n'est pas gardé. Clé API ou jeton personnel (page Profil).
+ * @summary Lit un modèle sans l'enregistrer (balises, vérifications, moteur) et propose des données d'exemple
+ */
+export const analyzeTemplate = async (tryAnalyzeForm: TryAnalyzeForm, options?: Parameters<typeof apiFetch>[1]): Promise<TryTemplate> => {
+    const formData = new FormData();
+formData.append(`template`, tryAnalyzeForm.template);
+
+  return apiFetch<TryTemplate>(getAnalyzeTemplateUrl(),
+  {
+    ...options,
+    method: 'POST'
+    ,
+    body: formData
+  }
+);}
+
+
+
+
+
+export const getAnalyzeTemplateMutationKey = () => ['analyzeTemplate'] as const;
+
+export const getAnalyzeTemplateMutationOptions = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | TooLargeResponse | BusyResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof analyzeTemplate>>, TError,AnalyzeTemplateMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof analyzeTemplate>>, TError,AnalyzeTemplateMutationVariables, TContext> => {
+
+const mutationKey = getAnalyzeTemplateMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof analyzeTemplate>>, AnalyzeTemplateMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  analyzeTemplate(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type AnalyzeTemplateMutationResult = NonNullable<Awaited<ReturnType<typeof analyzeTemplate>>>
+    export type AnalyzeTemplateMutationBody = TryAnalyzeForm
+    export type AnalyzeTemplateMutationError = ErrorType<BadRequestResponse | UnauthorizedResponse | TooLargeResponse | BusyResponse>
+    export type AnalyzeTemplateMutationVariables = {data: TryAnalyzeForm}
+
+    /**
+ * @summary Lit un modèle sans l'enregistrer (balises, vérifications, moteur) et propose des données d'exemple
+ */
+export const useAnalyzeTemplate = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | TooLargeResponse | BusyResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof analyzeTemplate>>, TError,AnalyzeTemplateMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof analyzeTemplate>>,
+        TError,
+        AnalyzeTemplateMutationVariables,
+        TContext
+      > => {
+      return useMutation(getAnalyzeTemplateMutationOptions(options), queryClient);
     }
 
 export const getListPublishedTemplatesUrl = (params?: ListPublishedTemplatesParams,) => {

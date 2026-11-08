@@ -1,8 +1,11 @@
 package httpapi
 
 import (
+	"bytes"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
+	"mime/multipart"
 	"net/http"
 	"os"
 	"strings"
@@ -140,5 +143,37 @@ func TestWordCharts(t *testing.T) {
 		if code, body, _ := c.upload("/api/try/analyze", name, file, nil); code != http.StatusBadRequest {
 			t.Errorf("%s must be refused: %d %v", name, code, body)
 		}
+	}
+}
+
+// The Word add-in reads the document being written with a personal token,
+// as an application would with its key; the console session is not enough.
+func TestAnalyzeWithToken(t *testing.T) {
+	srv, setup := open(t, nil)
+	c := &client{t: t, h: srv.Handler()}
+	if code, _, _ := c.do(http.MethodPost, "/api/auth/setup", map[string]string{"setupCode": setup.String(), "username": "admin", "password": "a long enough password"}); code != http.StatusOK {
+		t.Fatalf("setup: %d", code)
+	}
+	tpl := odtTemplate(t, `<text:p>Bonjour &lt;&lt;client.nom&gt;&gt;</text:p>`)
+	srv.SetRenderer(&fakeRenderer{odt: tpl})
+	analyze := func(headers ...string) (int, map[string]any) {
+		t.Helper()
+		var b bytes.Buffer
+		w := multipart.NewWriter(&b)
+		fw, _ := w.CreateFormFile("template", "modele.odt")
+		_, _ = fw.Write(tpl)
+		_ = w.Close()
+		rec := c.raw(http.MethodPost, "/v1/templates/analyze", w.FormDataContentType(), b.Bytes(), headers...)
+		var body map[string]any
+		_ = json.Unmarshal(rec.Body.Bytes(), &body)
+		return rec.Code, body
+	}
+	if code, _ := analyze(); code != http.StatusUnauthorized {
+		t.Fatalf("with the session only: %d", code)
+	}
+	_, created, _ := c.do(http.MethodPost, "/api/me/tokens", map[string]any{"name": "Word"})
+	code, body := analyze("Authorization", "Bearer "+fmt.Sprint(created["secret"]))
+	if sample, _ := json.Marshal(body["sample"]); code != http.StatusOK || string(sample) != `{"client":{"nom":"Exemple nom"}}` || body["lint"] == nil {
+		t.Fatalf("with a personal token: %d %v", code, body)
 	}
 }

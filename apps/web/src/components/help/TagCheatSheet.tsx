@@ -3,7 +3,7 @@ import { CopyButton } from '@/components/common/CopyButton'
 import { useI18n, type Key } from '@/i18n/useI18n'
 
 // The tags most used, to copy into Word.
-const TAGS: [string, Key][] = [
+export const TAGS: [string, Key][] = [
   ['<<client.nom>>', 'sheet.field'],
   ["<<montant{numFormat='#,##0.00 €'}>>", 'sheet.number'],
   ["<<dateEffet{dateFormat='dd/MM/yyyy'}>>", 'sheet.date'],
