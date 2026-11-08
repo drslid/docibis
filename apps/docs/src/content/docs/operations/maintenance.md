@@ -34,7 +34,7 @@ sudo docibis db move postgres://docibis:password@db.example.com:5432/docibis
 
 ## Update
 
-`sudo docibis update` backs up the database, installs the latest release (or the one given: `sudo docibis update v0.2.0`, or `main` for the latest build), then checks that the API answers. When the new version does not start, it goes back by itself to the previous version, with the data of the backup made just before, and writes the logs of the failure to `/opt/docibis/update-failed.log`.
+`sudo docibis update` backs up the database, installs the latest release (or the one given: `sudo docibis update v0.2.1`, or `main` for the latest build), then checks that the API answers. When the new version does not start, it goes back by itself to the previous version, with the data of the backup made just before, and writes the logs of the failure to `/opt/docibis/update-failed.log`.
 
 **What's new**, in the console, lists the changes of each version.
 

@@ -37,7 +37,7 @@ Run this single command on the server. It installs the latest release:
 curl -fsSL https://github.com/drslid/docibis/releases/latest/download/install.sh | sudo bash
 ```
 
-A given version: `https://github.com/drslid/docibis/releases/download/v0.2.0/install.sh`.
+A given version: `https://github.com/drslid/docibis/releases/download/v0.2.1/install.sh`.
 
 The installer asks for the database and, optionally, a domain name. It then:
 
