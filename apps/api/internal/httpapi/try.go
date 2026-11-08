@@ -549,9 +549,6 @@ func (s *Server) resolve(ctx context.Context, f *tryForm) error {
 	if err != nil {
 		return err
 	}
-	if t.Kind == "pdf" && !bytes.Contains(v.Content, []byte("/AcroForm")) {
-		return refuse("%q est un PDF fixe : il se joint aux documents (/v1/render/batch), il ne se remplit pas.", t.Path)
-	}
 	f.name, f.template, f.check, f.prepared = path.Base(t.Path), v.Content, t.DataCheck, v.Prepared
 	f.libID, f.libVersion = t.ID, v.Number
 	f.libVersionID, f.fast = v.ID, v.Fast
@@ -564,8 +561,12 @@ func (s *Server) resolve(ctx context.Context, f *tryForm) error {
 
 func ms(d time.Duration) int { return int((d + 500*time.Microsecond) / time.Millisecond) }
 
-// analyzeForm reads the tags of a template and proposes sample data.
+// analyzeForm reads the tags of a template, or the fields of a PDF form, and
+// proposes sample data.
 func (s *Server) analyzeForm(ctx context.Context, f tryForm) (TryTemplate, error) {
+	if err := s.resolve(ctx, &f); err == nil && isPDF(f.template) {
+		return analyzePDFForm(ctx, f)
+	}
 	odt, prep, dir, err := s.openForm(ctx, &f)
 	if err != nil {
 		return TryTemplate{}, err

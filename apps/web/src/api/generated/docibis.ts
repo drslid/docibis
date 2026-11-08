@@ -489,7 +489,7 @@ export interface SettingsUpdate {
 }
 
 export interface TryAnalyzeForm {
-  /** Modèle Word, Excel ou PowerPoint (.docx, .xlsx, .pptx) ou OpenDocument */
+  /** Modèle Word, Excel ou PowerPoint (.docx, .xlsx, .pptx), OpenDocument, ou formulaire PDF */
   template: Blob | File;
 }
 
@@ -1624,7 +1624,7 @@ export interface TryRenderForm {
 export type TryTemplateSample = { [key: string]: unknown };
 
 /**
- * Moteur possible (overlay = calque, native = natif, standard = LibreOffice)
+ * Moteur possible (overlay = calque, native = natif, standard = LibreOffice, form = formulaire PDF rempli sans LibreOffice)
  */
 export type TemplateAnalysisEngine = typeof TemplateAnalysisEngine[keyof typeof TemplateAnalysisEngine];
 
@@ -1633,6 +1633,7 @@ export const TemplateAnalysisEngine = {
   overlay: 'overlay',
   native: 'native',
   standard: 'standard',
+  form: 'form',
 } as const;
 
 export interface TemplateAnalysis {
@@ -1650,7 +1651,7 @@ export interface TemplateAnalysis {
   tables: number;
   /** Balises que DocIbis ne sait pas encore traiter */
   unsupported?: string[];
-  /** Moteur possible (overlay = calque, native = natif, standard = LibreOffice) */
+  /** Moteur possible (overlay = calque, native = natif, standard = LibreOffice, form = formulaire PDF rempli sans LibreOffice) */
   engine: TemplateAnalysisEngine;
   reason: string;
 }
@@ -1669,7 +1670,7 @@ export interface TryTemplate {
 }
 
 /**
- * Moteur utilisé, standard (LibreOffice), overlay (moteur rapide, calque posé sur un fond déjà rendu) ou native (copie Typst du modèle)
+ * Moteur utilisé, standard (LibreOffice), overlay (moteur rapide, calque posé sur un fond déjà rendu), native (copie Typst du modèle) ou form (formulaire PDF rempli sans LibreOffice)
  */
 export type TryResultEngine = typeof TryResultEngine[keyof typeof TryResultEngine];
 
@@ -1678,6 +1679,7 @@ export const TryResultEngine = {
   standard: 'standard',
   overlay: 'overlay',
   native: 'native',
+  form: 'form',
 } as const;
 
 export interface TryResult {
@@ -1687,7 +1689,7 @@ export interface TryResult {
   format: string;
   /** Taille du document, en octets */
   size: number;
-  /** Moteur utilisé, standard (LibreOffice), overlay (moteur rapide, calque posé sur un fond déjà rendu) ou native (copie Typst du modèle) */
+  /** Moteur utilisé, standard (LibreOffice), overlay (moteur rapide, calque posé sur un fond déjà rendu), native (copie Typst du modèle) ou form (formulaire PDF rempli sans LibreOffice) */
   engine: TryResultEngine;
   /** Préparation par LibreOffice (Word vers ODT) ; 0 si déjà faite */
   prepareMs: number;
@@ -3235,6 +3237,8 @@ export const getAnalyzeTemplateUrl = () => {
 /**
  * Pour le complément Word et les outils qui écrivent des modèles : le
  * fichier n'est pas gardé. Clé API ou jeton personnel (page Profil).
+ * Un formulaire PDF (CERFA…) donne ses champs, sous le nom que les
+ * données leur donnent, et le moteur form.
  * @summary Lit un modèle sans l'enregistrer (balises, vérifications, moteur) et propose des données d'exemple
  */
 export const analyzeTemplate = async (tryAnalyzeForm: TryAnalyzeForm, options?: Parameters<typeof apiFetch>[1]): Promise<TryTemplate> => {
@@ -4527,7 +4531,7 @@ export const getTryAnalyzeUrl = () => {
 }
 
 /**
- * @summary Lit un modèle Word ; moteur possible et données d'exemple tirées de ses balises
+ * @summary Lit un modèle Word ou un formulaire PDF ; moteur possible et données d'exemple tirées de ses balises ou de ses champs
  */
 export const tryAnalyze = async (tryAnalyzeForm: TryAnalyzeForm, options?: Parameters<typeof apiFetch>[1]): Promise<TryTemplate> => {
     const formData = new FormData();
@@ -4581,7 +4585,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
     export type TryAnalyzeMutationVariables = {data: TryAnalyzeForm}
 
     /**
- * @summary Lit un modèle Word ; moteur possible et données d'exemple tirées de ses balises
+ * @summary Lit un modèle Word ou un formulaire PDF ; moteur possible et données d'exemple tirées de ses balises ou de ses champs
  */
 export const useTryAnalyze = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | TooLargeResponse | BusyResponse>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof tryAnalyze>>, TError,TryAnalyzeMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}

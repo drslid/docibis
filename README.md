@@ -103,7 +103,7 @@ curl -H "Authorization: Bearer $DOCIBIS_API_KEY" \
 - A fast engine for fixed-layout templates, qualified automatically, in about a millisecond per document.
 - A native engine: a Typst copy of a template version, compared page by page with LibreOffice before it is used, renders in a few milliseconds; any new Word version falls back to LibreOffice until its copy is checked again.
 - Background rendering: `POST /v1/render/async` answers at once with a job; the document is read later, uploaded to a presigned S3 address, and a signed callback (HMAC, `WEBHOOK_SECRET`) tells the end.
-- PDF forms (CERFA and others): a PDF with form fields is filled with the data, then its fields are locked.
+- PDF forms (CERFA and others): a PDF with form fields is filled with the data, without LibreOffice. The console, `POST /v1/templates/analyze` and the library list its fields under the names to use, with sample data; dates and numbers fit rows of boxes (`2026-11-08` fills `08112026`); the fields filled are locked, the others stay open for what is filled by hand. Tested on ten real CERFA forms, hybrid XFA ones included.
 - An n8n node (`integrations/n8n-nodes-docibis`): render now or in the background, follow a job, list the templates.
 - An MCP server at `/v1/mcp` so that AI assistants can list templates and produce documents.
 - A Word add-in: a DocIbis pane inserts tags, checks the template being written and shows its PDF with data, signed in with a personal token; the console downloads the manifest of the instance.

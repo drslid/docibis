@@ -17,6 +17,7 @@ const ENGINES: Record<string, { label: Key; fast: boolean }> = {
   overlay: { label: 'try.engine.overlay', fast: true },
   native: { label: 'try.engine.native', fast: true },
   standard: { label: 'try.engine.standard', fast: false },
+  form: { label: 'try.engine.form', fast: true },
 }
 
 function message(error: unknown) {
@@ -51,9 +52,10 @@ export function TryPage() {
   const analyze = useTryAnalyze()
   const render = useTryRender()
   const { data: templates } = useListTemplates(undefined, { query: { retry: false } })
-  const published = (templates ?? []).filter((x) => x.kind === 'template' && x.published > 0)
+  const published = (templates ?? []).filter((x) => (x.kind === 'template' || x.engine === 'form') && x.published > 0)
   const template: TryTemplate | undefined = library ? undefined : analyze.data
   const family = familyOf(library?.path ?? file?.name)
+  const isForm = family === 'form'
   const formats = FORMATS.filter((f) => !f.family || f.family === family)
 
   useEffect(() => () => { if (pdf) URL.revokeObjectURL(pdf.url) }, [pdf])
@@ -135,7 +137,7 @@ export function TryPage() {
   }
 
   const engine = template ? ENGINES[template.analysis.engine] : undefined
-  const baseName = ((library ? library.path.split('/').pop() : file?.name) ?? 'document').replace(/\.(docx|odt|xlsx|ods|pptx|odp)$/i, '')
+  const baseName = ((library ? library.path.split('/').pop() : file?.name) ?? 'document').replace(/\.(docx|odt|xlsx|ods|pptx|odp|pdf)$/i, '')
   const shown = pdf?.result.format ?? 'pdf'
 
   return (
@@ -162,7 +164,7 @@ export function TryPage() {
               <input
                 ref={input}
                 type="file"
-                accept={TEMPLATE_FILES}
+                accept={`${TEMPLATE_FILES},.pdf`}
                 className="hidden"
                 aria-label={t('try.templateLabel')}
                 onChange={(e) => { const f = e.target.files?.[0]; if (f) choose(f); e.target.value = '' }}
@@ -204,13 +206,16 @@ export function TryPage() {
                   </span>
                 </div>
                 <p className="text-gray-500 dark:text-gray-400">
-                  {[
+                  {(isForm ? [
+                    t('try.fields', { n: template.analysis.fields }),
+                    t('try.checkboxes', { n: template.analysis.checkboxes }),
+                  ] : [
                     t('try.fields', { n: template.analysis.fields }),
                     t('try.checkboxes', { n: template.analysis.checkboxes }),
                     t('try.sections', { n: template.analysis.sections }),
                     t('try.repeats', { n: template.analysis.repeats }),
                     t('try.images', { n: template.analysis.images }),
-                  ].join(' · ')}
+                  ]).join(' · ')}
                 </p>
                 <p className="text-gray-500 dark:text-gray-400">{template.analysis.reason}.{template.prepareMs > 0 && ` ${t('try.prepared', { ms: template.prepareMs })}`}</p>
                 {template.analysis.unsupported && (
@@ -272,6 +277,8 @@ export function TryPage() {
                   {format !== 'pdf' && <p className="text-xs text-gray-400 mt-1">{t('try.pdfOnly')}</p>}
                 </div>
                 <fieldset className="contents" disabled={format !== 'pdf'}>
+                {isForm ? <p className="sm:col-span-2 text-xs text-gray-400">{t('try.formOptions')}</p> : (
+                <>
                 <div>
                   <label className="label" htmlFor="try-pdfa">{t('try.pdfa')} <HelpTip>{t('tip.pdfa')}</HelpTip></label>
                   <select id="try-pdfa" className="input" value={pdfa} onChange={(e) => setPdfa(e.target.value)}>
@@ -296,7 +303,9 @@ export function TryPage() {
                   <label className="flex items-center gap-2 text-sm pb-2"><input type="checkbox" checked={tiled} onChange={(e) => setTiled(e.target.checked)} /> {t('try.watermarkTiled')}</label>
                 </div>
                 <p className="sm:col-span-2 text-xs text-gray-400">{t('try.watermarkHint')}</p>
-                <PdfOptions value={pdfSettings} onChange={setPdfSettings} />
+                </>
+                )}
+                <PdfOptions value={pdfSettings} onChange={setPdfSettings} form={isForm} />
                 </fieldset>
               </div>
             </details>

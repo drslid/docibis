@@ -22,7 +22,7 @@ import (
 // answers any call), behind the API keys of /v1.
 const mcpPath = "/v1/mcp"
 
-const mcpInstructions = `DocIbis produit des documents PDF, Word, Excel et PowerPoint à partir de modèles Word, Excel ou PowerPoint (balises Docmosis <<champ>>) et de données JSON.
+const mcpInstructions = `DocIbis produit des documents PDF, Word, Excel et PowerPoint à partir de modèles Word, Excel ou PowerPoint (balises Docmosis <<champ>>) et de données JSON ; il remplit aussi les formulaires PDF (CERFA…).
 
 Appelez d'abord docibis_whoami. Pour produire un document : docibis_analyze_template sur le modèle (fichier .docx, .xlsx ou .pptx en base64) donne ses balises et des données d'exemple ; complétez-les, puis appelez docibis_render_document. Le document revient en pièce jointe (base64).
 
@@ -40,12 +40,12 @@ func readOnly() *mcp.ToolAnnotations {
 type emptyInput struct{}
 
 type templateInput struct {
-	Template string `json:"template_base64" jsonschema:"le modèle Word (.docx), Excel (.xlsx), PowerPoint (.pptx) ou OpenDocument, encodé en base64"`
+	Template string `json:"template_base64" jsonschema:"le modèle Word (.docx), Excel (.xlsx), PowerPoint (.pptx) ou OpenDocument, ou le formulaire PDF, encodé en base64"`
 	FileName string `json:"file_name,omitempty" jsonschema:"nom du fichier du modèle, pour l'historique (modele.docx par défaut)"`
 }
 
 type renderInput struct {
-	Template     string         `json:"template_base64,omitempty" jsonschema:"le modèle Word (.docx), Excel (.xlsx), PowerPoint (.pptx) ou OpenDocument, encodé en base64 ; ou bien template_name"`
+	Template     string         `json:"template_base64,omitempty" jsonschema:"le modèle Word (.docx), Excel (.xlsx), PowerPoint (.pptx) ou OpenDocument, ou le formulaire PDF, encodé en base64 ; ou bien template_name"`
 	FileName     string         `json:"file_name,omitempty" jsonschema:"nom du fichier du modèle, pour l'historique (modele.docx par défaut)"`
 	TemplateName string         `json:"template_name,omitempty" jsonschema:"chemin d'un modèle de la bibliothèque (voir docibis_list_templates) ; sa version publiée est utilisée"`
 	Data         map[string]any `json:"data" jsonschema:"les données JSON du document : un objet dont les clés sont les balises du modèle"`
@@ -189,7 +189,7 @@ func (s *Server) mcpServer() *mcp.Server {
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "docibis_analyze_template",
-		Description: "Lit un modèle Word, Excel ou PowerPoint : ses balises (champs, cases, sections, lignes répétées, images), le moteur possible et des données d'exemple à compléter pour docibis_render_document.",
+		Description: "Lit un modèle Word, Excel ou PowerPoint : ses balises (champs, cases, sections, lignes répétées, images), le moteur possible et des données d'exemple à compléter pour docibis_render_document. Un formulaire PDF (CERFA…) donne ses champs, sous le nom à employer dans les données.",
 		Annotations: readOnly(),
 	}, func(ctx context.Context, req *mcp.CallToolRequest, in templateInput) (*mcp.CallToolResult, *TryTemplate, error) {
 		if _, err := s.mcpKey(ctx, req); err != nil {
@@ -210,7 +210,7 @@ func (s *Server) mcpServer() *mcp.Server {
 	no := false
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "docibis_render_document",
-		Description: "Produit le document d'un modèle Word, Excel ou PowerPoint (fichier en base64, ou nom d'un modèle de la bibliothèque) et de ses données JSON, en PDF (par défaut) ou dans un format du même type que le modèle. Le document revient en pièce jointe base64 ; il apparaît dans l'historique de DocIbis (origine MCP), sans son contenu.",
+		Description: "Produit le document d'un modèle Word, Excel ou PowerPoint, ou remplit un formulaire PDF (fichier en base64, ou nom d'un modèle de la bibliothèque), avec ses données JSON, en PDF (par défaut) ou dans un format du même type que le modèle. Le document revient en pièce jointe base64 ; il apparaît dans l'historique de DocIbis (origine MCP), sans son contenu.",
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: &no, OpenWorldHint: &no},
 	}, func(ctx context.Context, req *mcp.CallToolRequest, in renderInput) (*mcp.CallToolResult, any, error) {
 		k, err := s.mcpKey(ctx, req)

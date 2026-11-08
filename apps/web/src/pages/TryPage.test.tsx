@@ -36,7 +36,7 @@ async function openTemplate(name = 'mandat.docx') {
       </MemoryRouter>
     </QueryClientProvider>,
   )
-  fireEvent.change(screen.getByLabelText('Modèle Word, Excel ou PowerPoint'), { target: { files: [new File(['PK'], name)] } })
+  fireEvent.change(screen.getByLabelText('Modèle Word, Excel, PowerPoint ou formulaire PDF'), { target: { files: [new File(['PK'], name)] } })
   expect(await screen.findByText('Calque possible')).toBeInTheDocument()
 }
 
@@ -124,9 +124,40 @@ describe('TryPage', () => {
     stubApi()
     await openTemplate()
     fireEvent.change(screen.getByLabelText('Format du document'), { target: { value: 'odt' } })
-    fireEvent.change(screen.getByLabelText('Modèle Word, Excel ou PowerPoint'), { target: { files: [new File(['PK'], 'facture.xlsx')] } })
+    fireEvent.change(screen.getByLabelText('Modèle Word, Excel, PowerPoint ou formulaire PDF'), { target: { files: [new File(['PK'], 'facture.xlsx')] } })
     const select = screen.getByLabelText('Format du document') as HTMLSelectElement
     expect([...select.options].map((o) => o.value)).toEqual(['pdf', 'xlsx', 'ods'])
     expect(select.value).toBe('pdf')
+  })
+
+  it('fills a PDF form: its fields, PDF only, the passwords as only options', async () => {
+    const form: TryTemplate = {
+      name: 'cerfa_13753.pdf', size: 520_000, prepareMs: 0, sample: { txtNoms: 'Exemple txtNoms', numCP: '12345' },
+      analysis: { fields: 2, flowFields: 0, checkboxes: 0, sections: 0, blockSections: 0, repeats: 0, images: 0, shapes: 0, tables: 0, engine: 'form', reason: 'formulaire PDF : DocIbis remplit ses champs lui-même, sans LibreOffice' },
+    }
+    const cerfa = { id: 9, path: 'cerfa/13753.pdf', kind: 'pdf', published: 1, versions: 1, engine: 'form' }
+    const answers: Record<string, unknown> = {
+      '/api/info': info, '/api/try/analyze': form, '/api/try/render': { ...result, engine: 'form' },
+      '/api/templates': [cerfa, { ...cerfa, id: 8, path: 'acme/cg.pdf', engine: '' }],
+    }
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => Response.json(answers[url])))
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <MemoryRouter>
+          <TryPage />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    )
+    expect(await screen.findByRole('option', { name: 'cerfa/13753.pdf' })).toBeInTheDocument()
+    expect(screen.queryByRole('option', { name: 'acme/cg.pdf' })).not.toBeInTheDocument()
+    fireEvent.change(screen.getByLabelText('Modèle Word, Excel, PowerPoint ou formulaire PDF'), { target: { files: [new File(['%PDF-'], 'cerfa_13753.pdf')] } })
+    expect(await screen.findByText('Formulaire PDF')).toBeInTheDocument()
+    expect(screen.getByText('2 champ(s) · 0 case(s)')).toBeInTheDocument()
+    expect(screen.getByLabelText('txtNoms')).toHaveValue('Exemple txtNoms')
+    expect([...(screen.getByLabelText('Format du document') as HTMLSelectElement).options].map((o) => o.value)).toEqual(['pdf'])
+    expect(screen.getByText("Un formulaire PDF est rempli tel quel : seuls les mots de passe et les restrictions s'appliquent.")).toBeInTheDocument()
+    expect(screen.queryByLabelText('Filigrane')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Titre')).not.toBeInTheDocument()
+    expect(screen.getByLabelText("Mot de passe d'ouverture")).toBeEnabled()
   })
 })

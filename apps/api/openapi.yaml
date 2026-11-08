@@ -388,6 +388,8 @@ paths:
       description: |
         Pour le complément Word et les outils qui écrivent des modèles : le
         fichier n'est pas gardé. Clé API ou jeton personnel (page Profil).
+        Un formulaire PDF (CERFA…) donne ses champs, sous le nom que les
+        données leur donnent, et le moteur form.
       security:
         - apiKey: []
       requestBody:
@@ -729,7 +731,7 @@ paths:
     post:
       operationId: tryAnalyze
       tags: [console]
-      summary: Lit un modèle Word ; moteur possible et données d'exemple tirées de ses balises
+      summary: Lit un modèle Word ou un formulaire PDF ; moteur possible et données d'exemple tirées de ses balises ou de ses champs
       requestBody:
         required: true
         content:
@@ -3330,7 +3332,7 @@ components:
       required: [template]
       properties:
         template:
-          description: Modèle Word, Excel ou PowerPoint (.docx, .xlsx, .pptx) ou OpenDocument
+          description: Modèle Word, Excel ou PowerPoint (.docx, .xlsx, .pptx), OpenDocument, ou formulaire PDF
           type: string
           format: binary
     RenderForm:
@@ -4511,9 +4513,9 @@ components:
           items:
             type: string
         engine:
-          description: Moteur possible (overlay = calque, native = natif, standard = LibreOffice)
+          description: Moteur possible (overlay = calque, native = natif, standard = LibreOffice, form = formulaire PDF rempli sans LibreOffice)
           type: string
-          enum: [overlay, native, standard]
+          enum: [overlay, native, standard, form]
         reason:
           type: string
     TryResult:
@@ -4531,9 +4533,9 @@ components:
           description: Taille du document, en octets
           type: integer
         engine:
-          description: Moteur utilisé, standard (LibreOffice), overlay (moteur rapide, calque posé sur un fond déjà rendu) ou native (copie Typst du modèle)
+          description: Moteur utilisé, standard (LibreOffice), overlay (moteur rapide, calque posé sur un fond déjà rendu), native (copie Typst du modèle) ou form (formulaire PDF rempli sans LibreOffice)
           type: string
-          enum: [standard, overlay, native]
+          enum: [standard, overlay, native, form]
         prepareMs:
           description: Préparation par LibreOffice (Word vers ODT) ; 0 si déjà faite
           type: integer

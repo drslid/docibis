@@ -19,9 +19,10 @@ export const FORMATS = [
 /** The template files a user picks. */
 export const TEMPLATE_FILES = '.docx,.odt,.xlsx,.ods,.pptx,.odp'
 
-/** The kind of a template, from its file name: text, spreadsheet or presentation. */
+/** The kind of a template, from its file name: text, spreadsheet, presentation, or a PDF form. */
 export function familyOf(name = '') {
   const ext = name.toLowerCase().split('.').pop()
+  if (ext === 'pdf') return 'form'
   return ext === 'xlsx' || ext === 'ods' ? 'spreadsheet' : ext === 'pptx' || ext === 'odp' ? 'presentation' : 'text'
 }
 
@@ -60,7 +61,8 @@ export function pdfSettingsForm(s: PdfSettings): Partial<TryRenderForm> {
   }
 }
 
-export function PdfOptions({ value, onChange }: { value: PdfSettings; onChange: (v: PdfSettings) => void }) {
+/** The PDF settings; a PDF form only takes the passwords and restrictions. */
+export function PdfOptions({ value, onChange, form = false }: { value: PdfSettings; onChange: (v: PdfSettings) => void; form?: boolean }) {
   const { t } = useI18n()
   const set = <K extends keyof PdfSettings>(key: K, v: PdfSettings[K]) => onChange({ ...value, [key]: v })
   const text = (key: 'title' | 'author' | 'subject' | 'keywords') => (
@@ -101,8 +103,12 @@ export function PdfOptions({ value, onChange }: { value: PdfSettings; onChange: 
         <label className="flex items-center gap-2 text-sm pb-2"><input type="checkbox" checked={value.noCopy} onChange={(e) => set('noCopy', e.target.checked)} /> {t('try.noCopy')}</label>
       </fieldset>
       <p className="sm:col-span-2 text-xs text-gray-400">{t('try.restrictHint')}</p>
-      <label className="flex items-center gap-2 text-sm sm:col-span-2"><input type="checkbox" checked={value.skipEmpty} onChange={(e) => set('skipEmpty', e.target.checked)} /> {t('try.skipEmpty')}</label>
-      {(['title', 'author', 'subject', 'keywords'] as const).map(text)}
+      {!form && (
+        <>
+          <label className="flex items-center gap-2 text-sm sm:col-span-2"><input type="checkbox" checked={value.skipEmpty} onChange={(e) => set('skipEmpty', e.target.checked)} /> {t('try.skipEmpty')}</label>
+          {(['title', 'author', 'subject', 'keywords'] as const).map(text)}
+        </>
+      )}
     </>
   )
 }

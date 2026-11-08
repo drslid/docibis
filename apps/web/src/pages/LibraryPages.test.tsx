@@ -71,11 +71,12 @@ describe('LibraryPage', () => {
   it('lists the templates with their version, engine and reference', async () => {
     serve((url) => {
       if (url.startsWith('/api/templates/stats')) return [{ id: 7, count: 1234, errors: 2, refused: 0 }]
-      return url.startsWith('/api/templates') ? [{ ...fiche, lint: { errors: 1, warnings: 0, infos: 0 } }, cg] : undefined
+      return url.startsWith('/api/templates') ? [{ ...fiche, lint: { errors: 1, warnings: 0, infos: 0 } }, cg, { ...cg, id: 9, path: 'cerfa/13753.pdf', engine: 'form' }] : undefined
     })
     show(<LibraryPage />)
     expect(await screen.findByText('acme/contracts/fiche_conseil.docx')).toBeInTheDocument()
     expect(screen.getByText('PDF fixe')).toBeInTheDocument()
+    expect(screen.getByText('Formulaire PDF')).toBeInTheDocument()
     expect(screen.getByText('v2 publiée')).toBeInTheDocument()
     expect(screen.getByText('Calque actif')).toBeInTheDocument()
     expect(screen.getByText('Écart')).toBeInTheDocument()

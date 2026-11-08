@@ -17,18 +17,28 @@ import (
 	"github.com/pdfcpu/pdfcpu/pkg/pdfcpu/model"
 )
 
-// formPDF writes a one-page PDF form: two text fields and a check box.
-func formPDF() []byte {
-	off := "<< /Type /XObject /Subtype /Form /BBox [0 0 12 12] /Length 0 >>\nstream\n\nendstream"
+// formPDF writes a one-page PDF form: two text fields, a check box, then the
+// other fields given (the entries of their dictionaries).
+func formPDF(extra ...string) []byte {
+	fields := append([]string{
+		"/FT /Tx /T (Nom[0]) /Rect [50 700 300 720] /DA (/Helv 12 Tf 0 g)",
+		"/FT /Tx /T (client.ville) /Rect [50 650 300 670] /DA (/Helv 12 Tf 0 g)",
+		"/FT /Btn /T (accord) /Rect [50 600 62 612] /V /Off /AS /Off /AP << /N << /Yes 5 0 R /Off 5 0 R >> >>",
+	}, extra...)
+	refs := make([]string, len(fields))
+	for i := range fields {
+		refs[i] = fmt.Sprintf("%d 0 R", i+6)
+	}
+	list := strings.Join(refs, " ")
 	objects := []string{
-		"<< /Type /Catalog /Pages 2 0 R /AcroForm << /Fields [4 0 R 5 0 R 6 0 R] /DA (/Helv 0 Tf 0 g) /DR << /Font << /Helv 7 0 R >> >> >> >>",
+		"<< /Type /Catalog /Pages 2 0 R /AcroForm << /Fields [" + list + "] /DA (/Helv 0 Tf 0 g) /DR << /Font << /Helv 4 0 R >> >> >> >>",
 		"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
-		"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Annots [4 0 R 5 0 R 6 0 R] >>",
-		"<< /Type /Annot /Subtype /Widget /FT /Tx /T (Nom[0]) /Rect [50 700 300 720] /P 3 0 R /DA (/Helv 12 Tf 0 g) /F 4 >>",
-		"<< /Type /Annot /Subtype /Widget /FT /Tx /T (client.ville) /Rect [50 650 300 670] /P 3 0 R /DA (/Helv 12 Tf 0 g) /F 4 >>",
-		"<< /Type /Annot /Subtype /Widget /FT /Btn /T (accord) /Rect [50 600 62 612] /P 3 0 R /V /Off /AS /Off /AP << /N << /Yes 8 0 R /Off 9 0 R >> >> /F 4 >>",
+		"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Annots [" + list + "] >>",
 		"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>",
-		off, off,
+		"<< /Type /XObject /Subtype /Form /BBox [0 0 12 12] /Length 0 >>\nstream\n\nendstream",
+	}
+	for _, f := range fields {
+		objects = append(objects, "<< /Type /Annot /Subtype /Widget "+f+" /P 3 0 R /F 4 >>")
 	}
 	var b bytes.Buffer
 	b.WriteString("%PDF-1.7\n")
@@ -84,6 +94,108 @@ func TestFillForm(t *testing.T) {
 	}
 	if _, _, err := fillForm(ctx, taggedPDF("/Standard /P", "Standard"), data); !errors.Is(err, errNoFormFields) {
 		t.Fatalf("a PDF without fields: %v", err)
+	}
+	if out, missing, err := fillForm(ctx, formPDF(), map[string]any{}); err != nil || !bytes.Equal(out, formPDF()) || len(missing) != 3 {
+		t.Fatalf("no data: the form as it is: %v %v", err, missing)
+	}
+}
+
+func TestFitText(t *testing.T) {
+	for _, c := range []struct {
+		in   string
+		n    int
+		want string
+	}{
+		{"08/11/2026", 8, "08112026"},
+		{"2026-11-08", 8, "08112026"},
+		{"2026-11-08T10:30:00Z", 8, "08112026"},
+		{"8/11/2026", 8, "08112026"},
+		{"2026-11-08", 6, "081126"},
+		{"123 456 789 00012", 14, "12345678900012"},
+		{"75 001", 5, "75001"},
+		{"Dupont-Durand", 6, "Dupont"},
+		{"Évelyne", 3, "Éve"},
+		{"2026-11-08", 10, "2026-11-08"},
+		{"2026-11-08", 0, "2026-11-08"},
+	} {
+		if got := fitText(c.in, c.n); got != c.want {
+			t.Errorf("fitText(%q, %d) = %q, want %q", c.in, c.n, got, c.want)
+		}
+	}
+	if got := inDateFormat("2026-11-08", "dd/mm/yyyy"); got != "08/11/2026" {
+		t.Errorf("date field: %q", got)
+	}
+	if got := inDateFormat("08/11/2026", "yyyy-mm-dd"); got != "08/11/2026" {
+		t.Errorf("a date not ISO stays: %q", got)
+	}
+}
+
+// A CERFA names its fields topmostSubform[0].Page1[0].Nom[0]: the data give
+// them their last part when it is the only one, else the whole name. Only
+// the fields filled are locked.
+func TestPDFFormKeys(t *testing.T) {
+	ctx := context.Background()
+	pdf := formPDF(
+		"/FT /Tx /T (topmostSubform[0].Page1[0].dateNaissance[0]) /Rect [50 550 150 570] /DA (/Helv 12 Tf 0 g) /MaxLen 8 /Ff 16777216",
+		"/FT /Tx /T (a[0].Commune[0]) /Rect [50 500 300 520] /DA (/Helv 12 Tf 0 g)",
+		"/FT /Tx /T (b[0].Commune[0]) /Rect [50 450 300 470] /DA (/Helv 12 Tf 0 g)",
+	)
+	fields, sample, err := describeForm(ctx, pdf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, _ := json.Marshal(fields)
+	want := `[{"path":"Nom","kind":"text","optional":false},{"path":"client.ville","kind":"text","optional":false},` +
+		`{"path":"dateNaissance","kind":"text","optional":false},{"path":"a[0].Commune[0]","kind":"text","optional":false},` +
+		`{"path":"b[0].Commune[0]","kind":"text","optional":false},{"path":"accord","kind":"flag","optional":false}]`
+	if string(got) != want || sample["Nom"] != "Exemple Nom" || sample["dateNaissance"] != "12345678" || sample["accord"] != true {
+		t.Fatalf("fields: %s %v", got, sample)
+	}
+
+	out, missing, err := fillForm(ctx, pdf, map[string]any{"Nom": "Dupont", "dateNaissance": "2026-11-08", "a[0].Commune[0]": "Paris"})
+	if err != nil || strings.Join(missing, ",") != "client.ville,b[0].Commune[0],accord" {
+		t.Fatalf("fill: %v %v", err, missing)
+	}
+	values, locked := map[string]string{}, map[string]bool{}
+	for _, x := range formValues(t, out).TextFields {
+		values[x.Name], locked[x.Name] = x.Value, x.Locked
+	}
+	if values["topmostSubform[0].Page1[0].dateNaissance[0]"] != "08112026" || values["a[0].Commune[0]"] != "Paris" || values["b[0].Commune[0]"] != "" {
+		t.Fatalf("values: %v", values)
+	}
+	if !locked["Nom[0]"] || !locked["a[0].Commune[0]"] || locked["client.ville"] || locked["b[0].Commune[0]"] {
+		t.Fatalf("only the fields filled are locked: %v", locked)
+	}
+}
+
+// The Try page reads a PDF form as a template; the library keeps its fields.
+func TestPDFFormInConsole(t *testing.T) {
+	srv, setup := open(t, nil)
+	c := &client{t: t, h: srv.Handler()}
+	if code, _, _ := c.do(http.MethodPost, "/api/auth/setup", map[string]string{"setupCode": setup.String(), "username": "admin", "password": "a long enough password"}); code != http.StatusOK {
+		t.Fatalf("setup: %d", code)
+	}
+	srv.SetRenderer(&fakeRenderer{})
+	code, body, _ := c.upload("/api/try/analyze", "cerfa.pdf", formPDF(), nil)
+	analysis, _ := body["analysis"].(map[string]any)
+	if sample, _ := body["sample"].(map[string]any); code != http.StatusOK || analysis["engine"] != "form" || analysis["fields"] != float64(2) ||
+		analysis["checkboxes"] != float64(1) || sample["Nom"] != "Exemple Nom" || len(body["fields"].([]any)) != 3 {
+		t.Fatalf("analyze: %d %v", code, body)
+	}
+	if code, body, _ := c.upload("/api/try/analyze", "cg.pdf", minimalPDF(1), nil); code != http.StatusBadRequest || !strings.Contains(fmt.Sprint(body["detail"]), "sans champs") {
+		t.Fatalf("a fixed PDF: %d %v", code, body)
+	}
+
+	code, body = c.send(http.MethodPost, "/api/templates", map[string]part{"file": {"cerfa.pdf", formPDF()}}, map[string]string{"path": "cerfa/13753.pdf"})
+	if fields, _ := body["fields"].([]any); code != http.StatusCreated || len(fields) != 3 {
+		t.Fatalf("library: %d %v", code, body)
+	}
+	if rec := c.raw(http.MethodGet, "/api/templates", "", nil); !strings.Contains(rec.Body.String(), `"engine":"form"`) {
+		t.Fatalf("a form in the library: %s", rec.Body.String())
+	}
+	code, body, _ = c.upload("/api/try/render", "", nil, map[string]string{"templateName": "cerfa/13753.pdf", "data": `{"Nom": "Dupont"}`})
+	if code != http.StatusOK || body["engine"] != "form" {
+		t.Fatalf("render: %d %v", code, body)
 	}
 }
 

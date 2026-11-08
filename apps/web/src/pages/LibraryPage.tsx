@@ -35,10 +35,11 @@ function message(error: unknown) {
 
 const badge = 'inline-flex items-center gap-1 whitespace-nowrap text-xs font-medium px-2 py-0.5 rounded-full'
 
-// The kind of a template: Word, fixed PDF, or Typst (a product name, not translated).
-function kindLabel(kind: string, t: ReturnType<typeof useI18n>['t']): string {
-  if (kind === 'typst') return 'Typst'
-  return t(kind === 'pdf' ? 'lib.kind.pdf' : 'lib.kind.template')
+// The kind of a template: Word, PDF form, fixed PDF, or Typst (a product name, not translated).
+function kindLabel(tpl: { kind: string; engine?: string }, t: ReturnType<typeof useI18n>['t']): string {
+  if (tpl.kind === 'typst') return 'Typst'
+  if (tpl.kind === 'pdf') return t(tpl.engine === 'form' ? 'lib.kind.form' : 'lib.kind.pdf')
+  return t('lib.kind.template')
 }
 const tones = {
   ok: 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300',
@@ -256,7 +257,7 @@ export function LibraryPage() {
                   <Link to={`/modeles/${tpl.id}`} className="text-brand-700 dark:text-brand-400 hover:underline">{tpl.path}</Link>
                   {tpl.description && <div className="font-sans text-gray-500 mt-0.5">{tpl.description}</div>}
                 </td>
-                <td className={td}><span className={`${badge} ${tones.grey}`}>{kindLabel(tpl.kind, t)}</span></td>
+                <td className={td}><span className={`${badge} ${tones.grey}`}>{kindLabel(tpl, t)}</span></td>
                 <td className={`${td} whitespace-nowrap`}>
                   {tpl.published > 0 ? t('lib.published', { n: tpl.published }) : <span className="text-amber-700 dark:text-amber-400">{t('lib.unpublished')}</span>}
                   {tpl.versions > 1 && <span className="text-gray-400"> · {t('lib.versionsCount', { n: tpl.versions })}</span>}
@@ -422,6 +423,8 @@ export function TemplatePage() {
   if (error) return <p className="text-sm text-red-700" role="alert">{message(error)}</p>
   if (isPending) return <p className="text-sm text-gray-500">{t('common.loading')}</p>
   const tpl = data.template
+  // A template or a PDF form: filled with data.
+  const fillable = tpl.kind === 'template' || tpl.engine === 'form'
   const origin = window.location.origin
   const curl = `curl -H "Authorization: Bearer $DOCIBIS_KEY" \\\n  -F templateName=${tpl.path} \\\n  -F data=@donnees.json \\\n  -o document.pdf ${origin}/v1/render`
 
@@ -433,7 +436,7 @@ export function TemplatePage() {
           <span className="font-mono text-xl break-all">{tpl.path}</span>
         </PageTitle>
         <div className="flex flex-wrap items-center gap-2 text-sm">
-          <span className={`${badge} ${tones.grey}`}>{kindLabel(tpl.kind, t)}</span>
+          <span className={`${badge} ${tones.grey}`}>{kindLabel(tpl, t)}</span>
           {tpl.published > 0 ? <span>{t('lib.published', { n: tpl.published })}</span> : <span className="text-amber-700">{t('lib.unpublished')}</span>}
           {tpl.kind === 'template' && tpl.published > 0 && <span className="text-gray-500">· <EngineBadge tpl={tpl} /></span>}
           {tpl.kind === 'template' && <CheckBadge check={tpl.check} hasReference={tpl.hasReference} />}
@@ -470,7 +473,7 @@ export function TemplatePage() {
             )}
           </div>
         </div>
-        {tpl.kind === 'template' && (
+        {fillable && (
           <div>
             <label className="label" htmlFor="tpl-check">{t('lib.dataCheck')} <HelpTip>{t('tip.dataCheck')}</HelpTip></label>
             <select id="tpl-check" className="input" disabled={!editor || update.isPending} value={tpl.dataCheck}
@@ -486,7 +489,7 @@ export function TemplatePage() {
 
       <NamesPanel tpl={tpl} aliases={data.aliases} editor={editor} admin={admin} onChange={set} />
 
-      {tpl.kind === 'template' && (
+      {fillable && (
         <section className="card">
           <div className="flex items-center justify-between mb-2">
             <h2 className="text-lg font-semibold">{t('lib.useIt')}</h2>
@@ -504,7 +507,7 @@ export function TemplatePage() {
         <NativePanel id={id} version={data.versions.find((v) => v.number === tpl.published)} editor={editor} admin={admin} />
       )}
 
-      {tpl.kind === 'template' && (
+      {fillable && (
         <section className="card">
           <h2 className="text-lg font-semibold mb-3">{t('lib.fields')} <span className="text-sm font-normal text-gray-400">({data.fields.length})</span></h2>
           {data.fields.length === 0 ? (

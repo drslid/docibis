@@ -172,8 +172,9 @@ func yes(value string, otherwise bool) bool {
 }
 
 // newVersion checks a file for the library: a Word or OpenDocument template,
-// or a fixed PDF. A template is described at once when the engine runs;
-// otherwise, and for bulk imports, it is described in the background.
+// or a PDF, fixed or a form to fill. A template is described at once when the
+// engine runs; otherwise, and for bulk imports, it is described in the
+// background. A form is described at once.
 func (s *Server) newVersion(ctx context.Context, p string, raw []byte, describe bool) (string, store.TemplateVersion, error) {
 	sum := sha256.Sum256(raw)
 	v := store.TemplateVersion{Content: raw, Size: int64(len(raw)), SHA256: hex.EncodeToString(sum[:])}
@@ -182,6 +183,11 @@ func (s *Server) newVersion(ctx context.Context, p string, raw []byte, describe 
 			return "", v, refuse("%s n'est pas un PDF.", p)
 		}
 		v.Fields, v.Sample, v.Lint = "[]", "{}", "[]"
+		if fields, sample, err := describeForm(ctx, raw); err == nil {
+			f, _ := json.Marshal(fields)
+			sm, _ := json.Marshal(sample)
+			v.Fields, v.Sample, v.Engine = string(f), string(sm), "form"
+		}
 		return "pdf", v, nil
 	}
 	if isTypst(p) {

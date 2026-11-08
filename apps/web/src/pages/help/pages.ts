@@ -98,12 +98,20 @@ joint en un seul PDF, ou les rend dans un zip.
 
 **Formulaires PDF (CERFA…)** : un PDF à champs de formulaire, envoyé (\`template\`) ou
 gardé dans la bibliothèque (\`templateName\`), est rempli avec les données au lieu d'être
-fusionné. Chaque champ lit la donnée de son nom (\`client.nom\` lit \`{"client": {"nom": …}}\`),
-sinon la dernière partie de son nom sans indice (\`topmostSubform[0].Page1[0].Nom[0]\` lit
-\`Nom\`) ; une case se coche avec \`true\`, \`"oui"\` ou \`1\`. Les champs remplis sont ensuite
-verrouillés ; les champs sans donnée sont signalés comme pour un modèle Word. Les formulaires
-XFA ne sont pas pris en charge ; un PDF sans champs reste un PDF fixe, joint par
-\`/v1/render/batch\`.
+fusionné, sans LibreOffice. Chaque champ lit la donnée de son nom (\`client.nom\` lit
+\`{"client": {"nom": …}}\`), sinon la dernière partie de son nom sans indice
+(\`topmostSubform[0].Page1[0].Nom[0]\` lit \`Nom\`) ; une case se coche avec \`true\`, \`"oui"\`
+ou \`1\`. La page **Essai**, \`POST /v1/templates/analyze\` et la bibliothèque
+(\`GET /v1/templates\`) donnent la liste des champs sous le nom à employer dans les données,
+avec des données d'exemple. Dans les cases d'un champ de longueur fixe (date JJMMAAAA, SIRET,
+code postal…), une date ou un nombre perd ses séparateurs : \`08/11/2026\` ou \`2026-11-08\`
+donne \`08112026\`. Les champs remplis sont verrouillés ; les autres restent ouverts, pour ce
+qui se remplit à la main (lieu, date, signature), et sont signalés comme les données
+manquantes d'un modèle Word. Les formulaires hybrides (champs et XFA, comme bien des CERFA)
+sont remplis par leurs champs ; les formulaires XFA dynamiques ne le sont pas. Mots de passe,
+restrictions et cachet s'appliquent ; PDF/A, filigrane et PDF accessible, non. Un PDF sans
+champs reste un PDF fixe, joint par \`/v1/render/batch\` ; une liasse joint les PDF de la
+bibliothèque tels quels.
 
 **Modèles Typst (sans Word)** : un fichier \`.typ\`, envoyé ou gardé dans la bibliothèque, est
 compilé par le moteur natif avec les données, en quelques millisecondes et sans LibreOffice.
@@ -314,7 +322,7 @@ Claude Desktop passe par le pont \`mcp-remote\` (Node.js) ; la clé reste dans u
 | Outil | Rôle |
 |---|---|
 | \`docibis_whoami\` | La clé utilisée, l'instance et la version : à appeler d'abord. |
-| \`docibis_analyze_template\` | Lit un modèle Word (en base64) : balises, moteur possible, données d'exemple. |
+| \`docibis_analyze_template\` | Lit un modèle Word ou un formulaire PDF (en base64) : balises ou champs, moteur possible, données d'exemple. |
 | \`docibis_render_document\` | Produit le PDF ou le Word d'un modèle et de ses données ; le document revient en pièce jointe. |
 | \`docibis_list_documents\` | Les derniers documents produits, avec recherche et filtre sur le résultat. |
 | \`docibis_stats\` | Les chiffres du tableau de bord : volumes, taux de réussite, durées. |

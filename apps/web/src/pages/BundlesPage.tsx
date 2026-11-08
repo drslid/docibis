@@ -87,7 +87,7 @@ function Editor({ bundle, onClose }: { bundle?: Bundle; onClose: () => void }) {
                 <span className="text-sm text-gray-400 tabular-nums">{i + 1}</span>
                 <select className="input py-1.5 text-sm font-mono" aria-label={t('bundles.template', { n: i + 1 })} value={item.template} onChange={(e) => setItem(i, { ...item, template: e.target.value })}>
                   <option value="">{t('bundles.pick')}</option>
-                  {choices.map((x) => <option key={x.id} value={x.path}>{x.path}{x.kind === 'pdf' ? ` (${t('lib.kind.pdf')})` : ''}</option>)}
+                  {choices.map((x) => <option key={x.id} value={x.path}>{x.path}{x.kind === 'pdf' ? ` (${t(x.engine === 'form' ? 'lib.kind.form' : 'lib.kind.pdf')})` : ''}</option>)}
                 </select>
                 <input className="input py-1.5 text-sm font-mono" aria-label={t('bundles.condition', { n: i + 1 })} placeholder={t('bundles.conditionHint')} value={item.condition ?? ''} onChange={(e) => setItem(i, { ...item, condition: e.target.value })} />
                 <input className="input py-1.5 text-sm font-mono" aria-label={t('bundles.dataPath', { n: i + 1 })} placeholder={t('bundles.dataPathHint')} value={item.dataPath ?? ''} onChange={(e) => setItem(i, { ...item, dataPath: e.target.value })} />

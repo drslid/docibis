@@ -64,6 +64,17 @@ A Word or PowerPoint chart shows the data of the document: name it `chart_sales`
 - Without data, the chart goes, as an image does. In a repeat, each copy has its own chart.
 - The charts of an Excel workbook read the sheet: they follow its repeated rows.
 
+## PDF forms
+
+A PDF with form fields (a CERFA, for example) is a template as it is: send it as `template`, or keep it in the library and call it by `templateName`. DocIbis fills its fields with the data, without LibreOffice.
+
+- **Field names.** A field reads the data at its name (`client.city` reads `{"client": {"city": …}}`), or at the last part of its name without index when no other field ends the same way: `topmostSubform[0].Page1[0].Name[0]` reads `Name`. The **Try** page, `POST /v1/templates/analyze` and the library list the fields under the names to use, with sample data.
+- **Values.** A check box is ticked by `true`, `"yes"`, `"oui"` or `1`; a radio group or a list takes one of its options. In a row of boxes of fixed length (a date as DDMMYYYY, a company number), a date or a number loses its separators: `08/11/2026` or `2026-11-08` gives `08112026`.
+- **Locking.** The fields filled are locked; the others stay open, for what is filled by hand (place, date, signature). Fields without data are reported as for any template (`X-Missing-Fields`).
+- **What applies.** Passwords, permissions and the seal; not PDF/A, watermarks or tagged PDF. Hybrid forms (fields plus XFA, as many CERFA forms) are filled through their fields; dynamic XFA forms are not. A PDF without fields is a fixed PDF, to join in a bundle or a batch.
+
+Tested on ten CERFA forms from service-public.fr: the seven with fields fill, accents, euro sign and boxes included; the three without fields are refused with a clear message.
+
 ## What you get
 
 The example invoice and its data give this PDF, with the rows repeated and the totals formatted:
