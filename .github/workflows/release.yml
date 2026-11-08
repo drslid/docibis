@@ -72,3 +72,23 @@ jobs:
           cache-from: type=gha,scope=${{ matrix.app }}
           cache-to: type=gha,mode=max,scope=${{ matrix.app }}
           no-cache-filters: runtime
+
+  # A version tag, once its images are pushed, becomes a GitHub release: the
+  # tag message as notes, and install.sh set to this version, so that
+  # releases/latest/download/install.sh installs the latest release.
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: images
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+      - name: GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir dist
+          sed "s/^REF=\${DOCIBIS_REF:-main}\$/REF=\${DOCIBIS_REF:-$GITHUB_REF_NAME}/" install.sh > dist/install.sh
+          grep -q "^REF=\${DOCIBIS_REF:-$GITHUB_REF_NAME}\$" dist/install.sh
+          gh release create "$GITHUB_REF_NAME" dist/install.sh --verify-tag --notes-from-tag --title "DocIbis $GITHUB_REF_NAME"

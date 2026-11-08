@@ -1,10 +1,15 @@
 package httpapi
 
 import (
+	"context"
 	"fmt"
 	"net/http"
+	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
+
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 func TestSpacesAndQuotas(t *testing.T) {
@@ -56,8 +61,33 @@ func TestSpacesAndQuotas(t *testing.T) {
 	if code, body, wait := render(secret, "habitation/fiche"); code != http.StatusTooManyRequests || !strings.Contains(body, "Quota du jour atteint pour la clé « app-habitation »") || wait == "" {
 		t.Fatalf("over the quota: %d %s %q", code, body, wait)
 	}
+
+	// Through MCP too: the quotas hold, and the history is the space's.
+	_, free, _ := c.do(http.MethodPost, "/api/keys", map[string]any{"name": "app-auto"})
+	if code, body, _ := render(free["secret"].(string), "auto/devis"); code != http.StatusOK {
+		t.Fatalf("key of the whole library: %d %s", code, body)
+	}
+	ts := httptest.NewServer(h)
+	defer ts.Close()
+	session, err := connectMCP(t, ts.URL, secret)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer session.Close()
+	ctx := context.Background()
+	res, _ := session.CallTool(ctx, &mcp.CallToolParams{Name: "docibis_render_document", Arguments: map[string]any{"template_name": "habitation/fiche", "data": map[string]any{"nom": "Dupont"}}})
+	if res == nil || !res.IsError || !strings.Contains(textOf(res), "Quota du jour atteint") {
+		t.Fatalf("MCP over the quota: %+v", res)
+	}
+	for _, tool := range []string{"docibis_list_documents", "docibis_stats"} {
+		res, _ := session.CallTool(ctx, &mcp.CallToolParams{Name: tool, Arguments: map[string]any{}})
+		if text := textOf(res); !strings.Contains(text, "fiche.odt") || strings.Contains(text, "devis.odt") {
+			t.Fatalf("%s for a key of the space: %s", tool, text)
+		}
+	}
 	_, keys := c.list("/api/keys")
-	if len(keys) != 1 || fmt.Sprint(keys[0]["usage"]) != "map[month:2 today:2]" || keys[0]["spaceId"] != float64(id) || keys[0]["dailyQuota"] != 2.0 {
+	slices.SortFunc(keys, func(a, b map[string]any) int { return strings.Compare(fmt.Sprint(b["name"]), fmt.Sprint(a["name"])) })
+	if len(keys) != 2 || keys[0]["name"] != "app-habitation" || fmt.Sprint(keys[0]["usage"]) != "map[month:2 today:2]" || keys[0]["spaceId"] != float64(id) || keys[0]["dailyQuota"] != 2.0 {
 		t.Fatalf("keys: %v", keys)
 	}
 

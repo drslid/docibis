@@ -3,6 +3,7 @@ package httpapi
 import (
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -56,8 +57,13 @@ func TestMcpDashboardAndPrometheus(t *testing.T) {
 	readOnly := map[string]bool{}
 	for _, tool := range tools.Tools {
 		readOnly[tool.Name] = tool.Annotations != nil && tool.Annotations.ReadOnlyHint
+		if tool.Name == "docibis_list_templates" {
+			if raw, _ := json.Marshal(tool.InputSchema); strings.Contains(string(raw), "status") || !strings.Contains(string(raw), "query") {
+				t.Fatalf("input of docibis_list_templates: %s", raw)
+			}
+		}
 	}
-	for name, want := range map[string]bool{"docibis_whoami": true, "docibis_analyze_template": true, "docibis_render_document": false, "docibis_list_documents": true, "docibis_stats": true} {
+	for name, want := range map[string]bool{"docibis_whoami": true, "docibis_list_templates": true, "docibis_analyze_template": true, "docibis_render_document": false, "docibis_list_documents": true, "docibis_stats": true} {
 		if got, ok := readOnly[name]; !ok || got != want {
 			t.Fatalf("tool %s: present %v, read-only %v", name, ok, got)
 		}

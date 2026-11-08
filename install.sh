@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 # DocIbis installer: Docker, configuration, images, start and first sign-in.
 #
-#   curl -fsSL https://raw.githubusercontent.com/drslid/docibis/main/install.sh | sudo bash
+#   curl -fsSL https://github.com/drslid/docibis/releases/latest/download/install.sh | sudo bash
 #
-# Run it again to update: the configuration (.env) and the data are kept.
+# That copy installs its release; this one installs DOCIBIS_REF (main by
+# default: the latest build). Run it again to update: the configuration
+# (.env) and the data are kept.
 # Without a terminal (or with DOCIBIS_YES=1) the answers come from these
 # variables: DOCIBIS_DB (sqlite, postgres or external), DOCIBIS_DATABASE_URL,
 # DOCIBIS_DOMAIN, DOCIBIS_PORT.
@@ -40,8 +42,8 @@ secret() { head -c 64 /dev/urandom | base64 | tr -dc 'A-Za-z0-9' | head -c "$1";
 [[ $(uname -s) == Linux ]] || die "DocIbis installs on Linux."
 [[ $EUID -eq 0 ]] || die "Run as root: curl -fsSL … | sudo bash"
 case $(uname -m) in
-  x86_64 | amd64) ;;
-  *) die "The DocIbis image is built for linux/amd64 (LibreOffice); this machine is $(uname -m)." ;;
+  x86_64 | amd64 | aarch64 | arm64) ;;
+  *) die "The DocIbis images are built for amd64 and arm64; this machine is $(uname -m)." ;;
 esac
 memory=$(awk '/MemTotal/ {print int($2 / 1024)}' /proc/meminfo)
 ((memory >= 1800)) || warn "${memory} MB of memory: 2 GB at least are advised (LibreOffice)."

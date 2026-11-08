@@ -13,7 +13,8 @@
   <img src="https://img.shields.io/badge/status-alpha-f59e0b" alt="Alpha status">
   <img src="https://img.shields.io/badge/Docker-Compose-2496ed?logo=docker&logoColor=white" alt="Docker Compose">
   <img src="https://img.shields.io/badge/LibreOffice-26.8-0f766e?logo=libreoffice&logoColor=white" alt="LibreOffice 26.8">
-  <img src="https://img.shields.io/badge/platform-amd64-17314a" alt="amd64">
+  <img src="https://img.shields.io/badge/platform-amd64%20%7C%20arm64-17314a" alt="amd64 and arm64">
+  <a href="https://github.com/drslid/docibis/releases/latest"><img src="https://img.shields.io/github/v/release/drslid/docibis?color=0f766e" alt="Latest release"></a>
   <a href="https://drslid.github.io/docibis/"><img src="https://img.shields.io/badge/docs-drslid.github.io%2Fdocibis-0f766e" alt="Documentation"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-0b1724" alt="MIT License"></a>
 </p>
@@ -25,16 +26,18 @@
 
 You need:
 
-- a Linux server or virtual machine, `amd64` (x86-64), with `curl`;
+- a Linux server or virtual machine, `amd64` (x86-64) or `arm64`, with `curl`;
 - `root` access or a user with `sudo`;
 - at least 2 GB RAM and 4 GB free disk;
 - TCP port `8080` open, or `80` and `443` with a domain name for HTTPS.
 
-Run this single command on the server. It installs the pinned `v0.1.0` release:
+Run this single command on the server. It installs the latest release:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/drslid/docibis/v0.1.0/install.sh | sudo env DOCIBIS_REF=v0.1.0 bash
+curl -fsSL https://github.com/drslid/docibis/releases/latest/download/install.sh | sudo bash
 ```
+
+A given version: `https://github.com/drslid/docibis/releases/download/v0.2.0/install.sh`.
 
 The installer asks for the database and, optionally, a domain name. It then:
 
@@ -60,13 +63,13 @@ Open the address, enter the code and create the administrator account. **Templat
 Without questions, for example with PostgreSQL and HTTPS:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/drslid/docibis/v0.1.0/install.sh \
-  | sudo env DOCIBIS_REF=v0.1.0 DOCIBIS_YES=1 DOCIBIS_DB=postgres DOCIBIS_DOMAIN=docs.example.com bash
+curl -fsSL https://github.com/drslid/docibis/releases/latest/download/install.sh \
+  | sudo env DOCIBIS_YES=1 DOCIBIS_DB=postgres DOCIBIS_DOMAIN=docs.example.com bash
 ```
 
 | Variable                | Values                                         | Default        |
 | ----------------------- | ---------------------------------------------- | -------------- |
-| `DOCIBIS_REF`           | release tag, or `main` for the latest build     | `main`         |
+| `DOCIBIS_REF`           | release tag, or `main` for the latest build     | its release    |
 | `DOCIBIS_DIR`           | installation folder                             | `/opt/docibis` |
 | `DOCIBIS_DB`            | `sqlite`, `postgres` or `external`              | `sqlite`       |
 | `DOCIBIS_DATABASE_URL`  | `postgres://…` address, with `external`         |                |

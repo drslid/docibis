@@ -35,8 +35,8 @@ func top(counts map[string]int, n int) []NameCount {
 }
 
 // dashboard counts the documents of the last 30 days (UTC), refusals and
-// failures apart.
-func (s *Server) dashboard(ctx context.Context) (Dashboard, error) {
+// failures apart; with only (not nil), the documents of these templates alone.
+func (s *Server) dashboard(ctx context.Context, only []int64) (Dashboard, error) {
 	st := s.db.Load()
 	now := time.Now().UTC()
 	first := now.Truncate(24*time.Hour).AddDate(0, 0, -29)
@@ -57,7 +57,7 @@ func (s *Server) dashboard(ctx context.Context) (Dashboard, error) {
 	for _, r := range rows {
 		d := r.CreatedAt.UTC().Format(time.DateOnly)
 		i, ok := day[d]
-		if !ok {
+		if !ok || only != nil && !slices.Contains(only, r.TemplateID) {
 			continue
 		}
 		p := &out.Days[i]
@@ -109,7 +109,7 @@ func (s *Server) dashboard(ctx context.Context) (Dashboard, error) {
 		return Dashboard{}, err
 	}
 	out.Users = len(users)
-	recent, _, err := st.Renders(ctx, store.RenderFilter{}, store.Page{Limit: 8})
+	recent, _, err := st.Renders(ctx, store.RenderFilter{TemplateIDs: only}, store.Page{Limit: 8})
 	if err != nil {
 		return Dashboard{}, err
 	}
@@ -121,7 +121,7 @@ func (s *Server) dashboard(ctx context.Context) (Dashboard, error) {
 }
 
 func (s *Server) GetDashboard(ctx context.Context, _ GetDashboardRequestObject) (GetDashboardResponseObject, error) {
-	out, err := s.dashboard(ctx)
+	out, err := s.dashboard(ctx, nil)
 	if err != nil {
 		return nil, err
 	}

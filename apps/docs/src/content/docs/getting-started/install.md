@@ -7,7 +7,7 @@ DocIbis runs with Docker on one Linux server. One command installs everything: D
 
 ## What you need
 
-- A Linux server or virtual machine, `amd64` (x86-64), with `curl`.
+- A Linux server or virtual machine, `amd64` (x86-64) or `arm64`, with `curl`.
 - `root` access, or a user with `sudo`.
 - At least 2 GB of memory and 4 GB of free disk.
 - TCP port `8080` open, or `80` and `443` if you give a domain name for HTTPS.
@@ -15,8 +15,10 @@ DocIbis runs with Docker on one Linux server. One command installs everything: D
 ## Run the installer
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/drslid/docibis/v0.1.0/install.sh | sudo env DOCIBIS_REF=v0.1.0 bash
+curl -fsSL https://github.com/drslid/docibis/releases/latest/download/install.sh | sudo bash
 ```
+
+This installs the latest release. For a given version, take its own installer: `https://github.com/drslid/docibis/releases/download/v0.2.0/install.sh`.
 
 The installer asks two questions:
 
@@ -44,13 +46,13 @@ Keep a copy of `/opt/docibis/.env` elsewhere. Its `APP_SECRET_KEY` encrypts the 
 Give the answers as variables, for example PostgreSQL in Docker and HTTPS:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/drslid/docibis/v0.1.0/install.sh \
-  | sudo env DOCIBIS_REF=v0.1.0 DOCIBIS_YES=1 DOCIBIS_DB=postgres DOCIBIS_DOMAIN=docs.example.com bash
+curl -fsSL https://github.com/drslid/docibis/releases/latest/download/install.sh \
+  | sudo env DOCIBIS_YES=1 DOCIBIS_DB=postgres DOCIBIS_DOMAIN=docs.example.com bash
 ```
 
 | Variable               | Values                                        | Default        |
 | ---------------------- | --------------------------------------------- | -------------- |
-| `DOCIBIS_REF`          | release tag, or `main` for the latest build   | `main`         |
+| `DOCIBIS_REF`          | release tag, or `main` for the latest build   | its release    |
 | `DOCIBIS_DIR`          | installation folder                           | `/opt/docibis` |
 | `DOCIBIS_DB`           | `sqlite`, `postgres` or `external`            | `sqlite`       |
 | `DOCIBIS_DATABASE_URL` | `postgres://…` address, with `external`       |                |

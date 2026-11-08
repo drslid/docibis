@@ -14,9 +14,11 @@ import (
 var xmlText = strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;")
 
 func TestExpressions(t *testing.T) {
-	data := `{"prime": 1234.567, "taux": "12,5", "nom": "dupont", "date": "2026-10-19", "lignes": [{"total": 10}, {"total": 2.5}], "age": 17, "statut": "ok", "vide": ""}`
+	data := `{"prime": 1234.567, "taux": "12,5", "eu": "1.250,50", "us": "1,250.50", "nom": "dupont", "date": "2026-10-19", "lignes": [{"total": 10}, {"total": 2.5}], "age": 17, "statut": "ok", "vide": ""}`
 	for _, tc := range []struct{ tag, want string }{
 		{`{numFormat(prime, '#,##0.00')}`, "1\u00a0234,57"},
+		{`{numFormat(eu, '#,##0.00')}`, "1\u00a0250,50"},
+		{`{numFormat(us, '#,##0.00')}`, "1\u00a0250,50"},
 		{`{numFormat(prime, '#,##0.00', 'en')}`, "1,234.57"},
 		{`{numFormat(2.5, '0')}`, "2"},
 		{`{numFormat(3.5, '0')}`, "4"},

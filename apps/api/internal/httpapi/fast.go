@@ -71,8 +71,14 @@ func (s *Server) overlay(ctx context.Context, versionID int64) (*fast.Overlay, e
 		return nil, err
 	}
 	s.overlays.mu.Lock()
-	if s.overlays.items == nil || len(s.overlays.items) >= 64 {
+	if s.overlays.items == nil {
 		s.overlays.items = map[int64]*fast.Overlay{}
+	}
+	for id := range s.overlays.items {
+		if len(s.overlays.items) < 64 {
+			break
+		}
+		delete(s.overlays.items, id)
 	}
 	s.overlays.items[versionID] = o
 	s.overlays.mu.Unlock()

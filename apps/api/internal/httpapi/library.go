@@ -1041,17 +1041,13 @@ func (s *Server) ListPublishedTemplates(ctx context.Context, req ListPublishedTe
 	if err != nil {
 		return nil, err
 	}
-	sp, err := s.keySpace(ctx)
+	prefixes, err := s.keyPrefixes(ctx)
 	if err != nil {
 		return nil, err
 	}
-	var prefixes []string
-	if sp != nil {
-		prefixes = spacePrefixes(sp.Prefixes)
-	}
 	out := ListPublishedTemplates200JSONResponse{}
 	for _, t := range rows {
-		if t.Published == 0 || (sp != nil && !inSpace(t.Path, prefixes)) {
+		if t.Published == 0 || !inSpace(t.Path, prefixes) {
 			continue
 		}
 		c := TemplateContract{Name: t.Path, Kind: TemplateContractKind(t.Kind), Version: t.Published, Fields: []TemplateField{}}

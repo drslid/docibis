@@ -24,7 +24,7 @@ const mcpPath = "/v1/mcp"
 
 const mcpInstructions = `DocIbis produit des documents PDF, Word, Excel et PowerPoint à partir de modèles Word, Excel ou PowerPoint (balises Docmosis <<champ>>) et de données JSON ; il remplit aussi les formulaires PDF (CERFA…).
 
-Appelez d'abord docibis_whoami. Pour produire un document : docibis_analyze_template sur le modèle (fichier .docx, .xlsx ou .pptx en base64) donne ses balises et des données d'exemple ; complétez-les, puis appelez docibis_render_document. Le document revient en pièce jointe (base64).
+Appelez d'abord docibis_whoami. Pour produire un document : docibis_list_templates donne les modèles de la bibliothèque (template_name) et leurs données d'exemple ; pour un fichier (.docx, .xlsx, .pptx ou formulaire PDF, en base64), docibis_analyze_template donne ses balises ou ses champs et des données d'exemple. Complétez-les, puis appelez docibis_render_document. Le document revient en pièce jointe (base64).
 
 docibis_list_documents et docibis_stats renseignent sur les documents déjà produits ; les documents eux-mêmes ne sont pas gardés.
 
@@ -57,6 +57,10 @@ type renderInput struct {
 
 type templateList struct {
 	Templates []TemplateContract `json:"templates"`
+}
+
+type templatesInput struct {
+	Query string `json:"query,omitempty" jsonschema:"texte cherché dans le nom et la description des modèles"`
 }
 
 type listInput struct {
@@ -163,6 +167,9 @@ func templateForm(in templateInput) (tryForm, error) {
 	name := filepath.Base(strings.TrimSpace(in.FileName))
 	if name == "" || name == "." || name == "/" {
 		name = "modele.docx"
+		if isPDF(raw) {
+			name = "formulaire.pdf"
+		}
 	}
 	return tryForm{name: name, template: raw}, nil
 }
@@ -241,6 +248,11 @@ func (s *Server) mcpServer() *mcp.Server {
 			return toolError(err), nil, nil
 		}
 		f.hasData = true
+		if wait, msg, err := s.quotaWait(ctx, k); err != nil {
+			return nil, nil, err
+		} else if wait > 0 {
+			return toolError(errors.New(msg)), nil, nil
+		}
 		start := time.Now()
 		doc, err := s.produceForm(ctx, f, strings.ToLower(strings.TrimSpace(in.Format)))
 		s.record(ctx, "mcp", k.Name, doc, err, time.Since(start))
@@ -260,7 +272,7 @@ func (s *Server) mcpServer() *mcp.Server {
 		Name:        "docibis_list_templates",
 		Description: "Les modèles publiés de la bibliothèque : leur nom (template_name de docibis_render_document), les données que chacun attend et des données d'exemple.",
 		Annotations: readOnly(),
-	}, func(ctx context.Context, req *mcp.CallToolRequest, in listInput) (*mcp.CallToolResult, *templateList, error) {
+	}, func(ctx context.Context, req *mcp.CallToolRequest, in templatesInput) (*mcp.CallToolResult, *templateList, error) {
 		if _, err := s.mcpKey(ctx, req); err != nil {
 			return toolError(err), nil, nil
 		}
@@ -274,17 +286,22 @@ func (s *Server) mcpServer() *mcp.Server {
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "docibis_list_documents",
-		Description: "Les derniers documents produits (console, API ou MCP) : date, modèle, auteur ou clé, durée, résultat et erreur. Ni le contenu ni les données ne sont gardés.",
+		Description: "Les derniers documents produits (console, API ou MCP) : date, modèle, auteur ou clé, durée, résultat et erreur. Ni le contenu ni les données ne sont gardés. Une clé gardée à un espace ne voit que les modèles de son espace.",
 		Annotations: readOnly(),
 	}, func(ctx context.Context, req *mcp.CallToolRequest, in listInput) (*mcp.CallToolResult, *RenderPage, error) {
 		if _, err := s.mcpKey(ctx, req); err != nil {
 			return toolError(err), nil, nil
 		}
+		templates, err := s.keyTemplates(ctx)
+		if err != nil {
+			return nil, nil, err
+		}
 		limit := in.Limit
 		if limit <= 0 {
 			limit = 20
 		}
-		rows, total, err := s.db.Load().Renders(ctx, store.RenderFilter{Text: strings.TrimSpace(in.Query), Status: strings.TrimSpace(in.Status)}, store.Page{Limit: min(limit, 50)})
+		filter := store.RenderFilter{Text: strings.TrimSpace(in.Query), Status: strings.TrimSpace(in.Status), TemplateIDs: templates}
+		rows, total, err := s.db.Load().Renders(ctx, filter, store.Page{Limit: min(limit, 50)})
 		if err != nil {
 			return nil, nil, err
 		}
@@ -297,13 +314,17 @@ func (s *Server) mcpServer() *mcp.Server {
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "docibis_stats",
-		Description: "Les chiffres des 30 derniers jours : documents par jour, taux de réussite, durées médiane et p95, modèles et applications les plus utilisés.",
+		Description: "Les chiffres des 30 derniers jours : documents par jour, taux de réussite, durées médiane et p95, modèles et applications les plus utilisés (ceux de son espace pour une clé gardée à un espace).",
 		Annotations: readOnly(),
 	}, func(ctx context.Context, req *mcp.CallToolRequest, _ emptyInput) (*mcp.CallToolResult, *Dashboard, error) {
 		if _, err := s.mcpKey(ctx, req); err != nil {
 			return toolError(err), nil, nil
 		}
-		out, err := s.dashboard(ctx)
+		templates, err := s.keyTemplates(ctx)
+		if err != nil {
+			return nil, nil, err
+		}
+		out, err := s.dashboard(ctx, templates)
 		if err != nil {
 			return nil, nil, err
 		}

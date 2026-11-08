@@ -46,6 +46,10 @@ func TestFields(t *testing.T) {
 	if got != want {
 		t.Fatalf("\n got %s\nwant %s", got, want)
 	}
+	// Data copied from Word keep its line breaks (\v): XML refuses them.
+	if got := run(t, `<text:p>&lt;&lt;name&gt;&gt;</text:p>`, `{"name": "Rue\u000bdu Port\u0001"}`); got != `<text:p>Rue du Port</text:p>` {
+		t.Fatalf("control characters: %q", got)
+	}
 }
 
 func TestCheckboxes(t *testing.T) {

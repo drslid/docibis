@@ -138,6 +138,11 @@ func escape(b *bytes.Buffer, s string, attr bool) {
 			b.WriteString("&quot;")
 		case (r == '\n' || r == '\r' || r == '\t') && attr:
 			fmt.Fprintf(b, "&#%d;", r)
+		case r < ' ' && r != '\n' && r != '\r' && r != '\t', r == 0xFFFE, r == 0xFFFF:
+			// Not allowed in XML: Word's line break (\v) and page break (\f) become spaces.
+			if r == '\v' || r == '\f' {
+				b.WriteByte(' ')
+			}
 		default:
 			b.WriteRune(r)
 		}

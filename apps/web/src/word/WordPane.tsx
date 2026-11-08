@@ -31,6 +31,7 @@ async function call(path: string, token: string, form: FormData): Promise<Respon
 export function WordPane() {
   const { t } = useI18n()
   const [word, setWord] = useState<boolean>()
+  // Kept in localStorage so that Word reopens signed in; /word/ runs only its own scripts (CSP).
   const [token, setToken] = useState(() => localStorage.getItem(TOKEN) ?? '')
   const [draft, setDraft] = useState('')
   const [tab, setTab] = useState<'tags' | 'check' | 'preview'>('tags')

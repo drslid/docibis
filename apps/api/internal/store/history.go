@@ -119,10 +119,12 @@ func (s *Store) RecordRender(ctx context.Context, r *Render) error {
 	return err
 }
 
-// RenderFilter selects the history; empty fields are ignored.
+// RenderFilter selects the history; empty fields are ignored. TemplateIDs,
+// when not nil, keeps the documents of these library templates only.
 type RenderFilter struct {
 	Text, Status, Source, Format string
 	Since                        *time.Time
+	TemplateIDs                  []int64
 }
 
 // Renders returns a page of the history, the newest first, and the count.
@@ -134,6 +136,13 @@ func (s *Store) Renders(ctx context.Context, f RenderFilter, p Page) ([]Render, 
 		q = q.WhereGroup(" AND ", func(q *bun.SelectQuery) *bun.SelectQuery {
 			return q.Where(s.like("template"), pattern).WhereOr(s.like("actor"), pattern).WhereOr(s.like("error"), pattern)
 		})
+	}
+	switch {
+	case f.TemplateIDs == nil:
+	case len(f.TemplateIDs) == 0:
+		q = q.Where("1 = 0")
+	default:
+		q = q.Where("template_id IN (?)", bun.In(f.TemplateIDs))
 	}
 	for column, value := range map[string]string{"status": f.Status, "source": f.Source, "format": f.Format} {
 		if value != "" {
@@ -151,7 +160,7 @@ func (s *Store) Renders(ctx context.Context, f RenderFilter, p Page) ([]Render, 
 // of the documents produced since a date, for the statistics.
 func (s *Store) RenderTimes(ctx context.Context, since time.Time) ([]Render, error) {
 	rows := []Render{}
-	err := s.DB.NewSelect().Model(&rows).Column("created_at", "source", "actor", "template", "status", "duration_ms").Where("created_at >= ?", since.UTC()).Order("id").Scan(ctx)
+	err := s.DB.NewSelect().Model(&rows).Column("created_at", "source", "actor", "template", "template_id", "status", "duration_ms").Where("created_at >= ?", since.UTC()).Order("id").Scan(ctx)
 	return rows, err
 }
 

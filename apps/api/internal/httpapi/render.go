@@ -29,11 +29,11 @@ func (s *Server) RenderDocument(ctx context.Context, req RenderDocumentRequestOb
 			return RenderDocument400ApplicationProblemPlusJSONResponse{BadRequestApplicationProblemPlusJSONResponse(p)}, nil
 		}
 	}
-	total, engine := ms(time.Since(start)), "standard"
+	total := ms(time.Since(start))
 	headers := map[string]string{
 		"Content-Disposition": mime.FormatMediaType("attachment", map[string]string{"filename": doc.fileName()}),
 		"X-Render-Ms":         strconv.Itoa(total),
-		"X-Render-Engine":     engine,
+		"X-Render-Engine":     doc.engineName(),
 	}
 	if len(doc.missing) > 0 {
 		headers["X-Missing-Fields"] = missingHeader(doc.missing)

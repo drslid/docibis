@@ -513,7 +513,13 @@ func number(v any) (float64, bool) {
 			return f, true
 		}
 		s = strings.NewReplacer(" ", "", "\u00a0", "", "\u202f", "").Replace(s)
-		if strings.Count(s, ",") == 1 && !strings.Contains(s, ".") {
+		// With both separators (1.250,50 or 1,250.50), the last one is the decimal one.
+		switch c, d := strings.LastIndex(s, ","), strings.LastIndex(s, "."); {
+		case c > d && d >= 0:
+			s = strings.ReplaceAll(s[:c], ".", "") + "." + s[c+1:]
+		case d > c && c >= 0:
+			s = strings.ReplaceAll(s, ",", "")
+		case strings.Count(s, ",") == 1:
 			s = strings.Replace(s, ",", ".", 1)
 		}
 		f, err := strconv.ParseFloat(s, 64)

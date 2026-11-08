@@ -11,6 +11,7 @@ import (
 
 // rateLimits keeps a bucket per API key: perMinute calls, refilled evenly,
 // with a burst of a full minute.
+// shortcut: one bucket per container; with 2 containers a key gets up to twice its calls.
 type rateLimits struct {
 	mu      sync.Mutex
 	buckets map[int64]*bucket

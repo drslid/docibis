@@ -322,9 +322,10 @@ Claude Desktop passe par le pont \`mcp-remote\` (Node.js) ; la clé reste dans u
 | Outil | Rôle |
 |---|---|
 | \`docibis_whoami\` | La clé utilisée, l'instance et la version : à appeler d'abord. |
-| \`docibis_analyze_template\` | Lit un modèle Word ou un formulaire PDF (en base64) : balises ou champs, moteur possible, données d'exemple. |
-| \`docibis_render_document\` | Produit le PDF ou le Word d'un modèle et de ses données ; le document revient en pièce jointe. |
-| \`docibis_list_documents\` | Les derniers documents produits, avec recherche et filtre sur le résultat. |
+| \`docibis_list_templates\` | Les modèles publiés de la bibliothèque, les données que chacun attend et des données d'exemple. |
+| \`docibis_analyze_template\` | Lit un modèle Word, Excel, PowerPoint ou un formulaire PDF (en base64) : balises ou champs, moteur possible, données d'exemple. |
+| \`docibis_render_document\` | Produit le document d'un modèle (fichier ou nom dans la bibliothèque) et de ses données, en PDF ou dans un format du même type ; il revient en pièce jointe. Les quotas de la clé s'appliquent. |
+| \`docibis_list_documents\` | Les derniers documents produits, avec recherche et filtre sur le résultat (ceux de son espace pour une clé gardée à un espace). |
 | \`docibis_stats\` | Les chiffres du tableau de bord : volumes, taux de réussite, durées. |
 | \`docibis_native_context\` | Pour écrire la copie Typst d'une version (moteur natif) : champs, jeux d'essai, règles, pages de LibreOffice en images. Éditeur. |
 | \`docibis_native_preview\` | Compile une copie et la compare à LibreOffice (pages, texte, écart en ‰), sans l'enregistrer. Éditeur. |

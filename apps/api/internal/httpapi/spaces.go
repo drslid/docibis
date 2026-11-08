@@ -57,6 +57,36 @@ func (s *Server) keySpace(ctx context.Context) (*store.Space, error) {
 	return &sp, nil
 }
 
+// keyPrefixes returns the prefixes of the space of the key of the request;
+// none when it may use the whole library.
+func (s *Server) keyPrefixes(ctx context.Context) ([]string, error) {
+	sp, err := s.keySpace(ctx)
+	if err != nil || sp == nil {
+		return nil, err
+	}
+	return spacePrefixes(sp.Prefixes), nil
+}
+
+// keyTemplates returns the library ids of the templates the key of the
+// request may use; nil when it may use the whole library.
+func (s *Server) keyTemplates(ctx context.Context) ([]int64, error) {
+	prefixes, err := s.keyPrefixes(ctx)
+	if err != nil || len(prefixes) == 0 {
+		return nil, err
+	}
+	rows, err := s.db.Load().Templates(ctx, "")
+	if err != nil {
+		return nil, err
+	}
+	ids := []int64{}
+	for _, t := range rows {
+		if inSpace(t.Path, prefixes) {
+			ids = append(ids, t.ID)
+		}
+	}
+	return ids, nil
+}
+
 // checkSpace refuses a template outside the space of the key of the request.
 func (s *Server) checkSpace(ctx context.Context, p string) error {
 	sp, err := s.keySpace(ctx)
@@ -75,6 +105,7 @@ func producesDocuments(method, p string) bool {
 
 // quotaWait tells how many seconds a key waits before its quotas, or those of
 // its space, allow documents again, and why; 0 when it may produce.
+// shortcut: checked before, counted after: calls running at once may pass a full quota by their number.
 func (s *Server) quotaWait(ctx context.Context, k store.APIKey) (int, string, error) {
 	if k.ID <= 0 || k.UserID != 0 {
 		return 0, "", nil

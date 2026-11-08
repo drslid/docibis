@@ -220,7 +220,8 @@ func TestRenderPDFForm(t *testing.T) {
 		return rec
 	}
 	rec := post(map[string]string{"data": `{"Nom": "Dupont", "client": {"ville": "Paris"}, "accord": true}`})
-	if rec.Code != http.StatusOK || rec.Header().Get("Content-Type") != "application/pdf" || rec.Header().Get("Content-Disposition") != "attachment; filename=cerfa.pdf" {
+	if rec.Code != http.StatusOK || rec.Header().Get("Content-Type") != "application/pdf" || rec.Header().Get("Content-Disposition") != "attachment; filename=cerfa.pdf" ||
+		rec.Header().Get("X-Render-Engine") != "form" {
 		t.Fatalf("render: %d %v %s", rec.Code, rec.Header(), rec.Body.String())
 	}
 	if f := formValues(t, rec.Body.Bytes()); f.TextFields[0].Value != "Dupont" && f.TextFields[1].Value != "Dupont" {
