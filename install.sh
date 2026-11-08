@@ -167,13 +167,13 @@ domain=$(sed -n 's/^DOCIBIS_DOMAIN=//p' .env)
 if [[ -n $domain ]]; then
   url="https://$domain"
 else
-  host=$(hostname -I 2>/dev/null | awk '{print $1}')
+  host=$(hostname -I 2>/dev/null | awk '{print $1}' || true)
   url="http://${host:-localhost}:${port:-8080}"
 fi
 echo
 say "DocIbis is running: $url"
 if grep -q '"setupRequired":true' "$work/session.json"; then
-  code=$(docker compose logs api 2>/dev/null | grep -o '"setup_code":"[^"]*"' | tail -1 | cut -d'"' -f4)
+  code=$(docker compose logs api 2>/dev/null | grep -o '"setup_code":"[^"]*"' | tail -1 | cut -d'"' -f4 || true)
   echo "    Setup code: ${bold}${code}${plain}"
   echo "    Open the address, enter this code and create the first administrator."
 fi
