@@ -88,6 +88,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          # checkout leaves the tag without its message, which gives the notes.
+          git fetch --force origin "refs/tags/$GITHUB_REF_NAME:refs/tags/$GITHUB_REF_NAME"
           mkdir dist
           sed "s/^REF=\${DOCIBIS_REF:-main}\$/REF=\${DOCIBIS_REF:-$GITHUB_REF_NAME}/" install.sh > dist/install.sh
           grep -q "^REF=\${DOCIBIS_REF:-$GITHUB_REF_NAME}\$" dist/install.sh
